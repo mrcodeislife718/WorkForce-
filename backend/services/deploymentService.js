@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const sequelize = require('../config/database');
 const {
   Worker,
@@ -12,6 +13,8 @@ const {
 const registry = require('../connectors/registerBuiltins')();
 const { loadSecrets, validateConnection } = require('./connectionService');
 const { validateCapabilityAssignments } = require('./capabilityResolver');
+
+const PAST_TENSE = { pause: 'paused', resume: 'resumed', uninstall: 'uninstalled' };
 
 async function event(deploymentId, deploymentConnectionId, eventType, message, metadata = {}, severity = 'info') {
   return DeploymentEvent.create({
@@ -76,6 +79,9 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
     }
   }
 
+  const telemetryToken = crypto.randomBytes(32).toString('base64url');
+  const telemetryTokenHash = crypto.createHash('sha256').update(telemetryToken).digest('hex');
+
   const created = await sequelize.transaction(async (transaction) => {
     const deployment = await Deployment.create({
       user_id: userId,
@@ -85,6 +91,7 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
       status: 'validating',
       availability_target: '24/7/365',
       runtime_configuration: {},
+      telemetry_token_hash: telemetryTokenHash,
     }, { transaction });
 
     const deploymentConnections = [];
@@ -145,6 +152,7 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
         deployment: created.deployment,
         grants,
         selectedResourceIds: deploymentConnection.selected_resource_ids,
+        telemetryToken,
       });
       if (!result?.ok || !result.external_installation_id) {
         throw new Error(`Installation failed for ${connection.workspace_name}.`);
@@ -215,6 +223,7 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
 async function loadDeployment(userId, deploymentId) {
   return Deployment.findOne({
     where: { id: deploymentId, user_id: userId },
+    attributes: { exclude: ['telemetry_token_hash'] },
     include: [
       { model: Worker },
       {
@@ -249,11 +258,12 @@ async function changeLifecycle({ userId, deploymentId, action }) {
         await adapter.uninstallDigitalEmployee({ connection, secrets, deploymentConnection });
         await deploymentConnection.update({ status: 'removed' });
       }
+      const completedAction = PAST_TENSE[action];
       await event(
         deployment.id,
         deploymentConnection.id,
-        `deployment.connection.${action}d`,
-        `Digital employee ${action} completed for ${connection.workspace_name}.`,
+        `deployment.connection.${completedAction}`,
+        `Digital employee ${completedAction} for ${connection.workspace_name}.`,
       );
     } catch (error) {
       failures.push({ connection_id: connection.id, workspace_name: connection.workspace_name, error: error.message });
@@ -262,7 +272,7 @@ async function changeLifecycle({ userId, deploymentId, action }) {
   }
 
   if (failures.length > 0) {
-    await deployment.update({ status: 'degraded' });
+    await Deployment.update({ status: 'degraded' }, { where: { id: deployment.id } });
     const error = new Error(`Deployment ${action} was incomplete.`);
     error.details = failures;
     throw error;
@@ -273,8 +283,9 @@ async function changeLifecycle({ userId, deploymentId, action }) {
     : action === 'resume'
       ? { status: 'active', paused_at: null, last_activity_at: new Date() }
       : { status: 'uninstalled', uninstalled_at: new Date() };
-  await deployment.update(updates);
-  await event(deployment.id, null, `deployment.${action}d`, `Digital employee ${action} completed.`);
+  await Deployment.update(updates, { where: { id: deployment.id } });
+  const completedAction = PAST_TENSE[action];
+  await event(deployment.id, null, `deployment.${completedAction}`, `Digital employee ${completedAction}.`);
   return loadDeployment(userId, deployment.id);
 }
 
