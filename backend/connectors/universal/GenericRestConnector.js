@@ -39,11 +39,7 @@ function interpolatePath(path, params = {}) {
 
 class GenericRestConnector extends ConnectorAdapter {
   constructor() {
-    super({
-      key: 'generic-rest',
-      name: 'Generic REST API',
-      capabilities: ['api.request'],
-    });
+    super({ key: 'generic-rest', name: 'Generic REST API', capabilities: ['api.request'] });
   }
 
   async request({ configuration, secrets, operation, input = {} }) {
@@ -53,12 +49,9 @@ class GenericRestConnector extends ConnectorAdapter {
     const method = String(operation.method || 'GET').toUpperCase();
     if (!ALLOWED_METHODS.has(method)) throw new Error(`HTTP method ${method} is not allowed.`);
 
-    const baseUrl = configuration.base_url.endsWith('/')
-      ? configuration.base_url
-      : `${configuration.base_url}/`;
+    const baseUrl = configuration.base_url.endsWith('/') ? configuration.base_url : `${configuration.base_url}/`;
     const relativePath = interpolatePath(operation.path.replace(/^\//, ''), input.path_params || {});
     const url = new URL(relativePath, baseUrl).toString();
-
     await assertSafeUrl(url, configuration.allowed_hosts || []);
 
     const response = await axios({
@@ -94,11 +87,7 @@ class GenericRestConnector extends ConnectorAdapter {
     try {
       const operation = connection.configuration?.operations?.health;
       if (!operation) throw new Error('A real health operation must be configured.');
-      const response = await this.request({
-        configuration: connection.configuration,
-        secrets,
-        operation,
-      });
+      const response = await this.request({ configuration: connection.configuration, secrets, operation });
       return { ok: true, provider_response_status: response.status };
     } catch (error) {
       return { ok: false, error: this.normalizeError(error) };
@@ -108,11 +97,7 @@ class GenericRestConnector extends ConnectorAdapter {
   async discoverResources({ connection, secrets }) {
     const operation = connection.configuration?.operations?.discover_resources;
     if (!operation) return [];
-    const response = await this.request({
-      configuration: connection.configuration,
-      secrets,
-      operation,
-    });
+    const response = await this.request({ configuration: connection.configuration, secrets, operation });
     const resources = Array.isArray(response.data) ? response.data : response.data?.resources;
     if (!Array.isArray(resources)) throw new Error('Resource discovery response must contain an array.');
     return resources.map((resource) => ({
@@ -124,11 +109,17 @@ class GenericRestConnector extends ConnectorAdapter {
     }));
   }
 
-  async installDigitalEmployee({ connection, secrets, worker, deployment, grants, selectedResourceIds }) {
+  async installDigitalEmployee({
+    connection,
+    secrets,
+    worker,
+    deployment,
+    grants,
+    selectedResourceIds,
+    telemetryToken,
+  }) {
     const operation = connection.configuration?.operations?.install;
-    if (!operation) {
-      throw new Error('A real install operation must be configured for this workspace.');
-    }
+    if (!operation) throw new Error('A real install operation must be configured for this workspace.');
     const response = await this.request({
       configuration: connection.configuration,
       secrets,
@@ -136,24 +127,21 @@ class GenericRestConnector extends ConnectorAdapter {
       input: {
         body: {
           orca_deployment_id: deployment.id,
-          digital_employee: {
-            id: worker.id,
-            name: worker.name,
-            version: worker.version,
-          },
+          digital_employee: { id: worker.id, name: worker.name, version: worker.version },
           approved_capabilities: grants.map((grant) => ({
             key: grant.capability_key,
             constraints: grant.constraints || {},
           })),
           selected_resource_ids: selectedResourceIds,
-          telemetry_url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}`,
+          telemetry: {
+            url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+            bearer_token: telemetryToken,
+          },
         },
       },
     });
     const externalInstallationId = response.data?.installation_id || response.data?.id;
-    if (!externalInstallationId) {
-      throw new Error('Install response did not return installation_id or id.');
-    }
+    if (!externalInstallationId) throw new Error('Install response did not return installation_id or id.');
     return { ok: true, external_installation_id: String(externalInstallationId), response: response.data };
   }
 
@@ -163,17 +151,9 @@ class GenericRestConnector extends ConnectorAdapter {
     return this.request({ configuration: connection.configuration, secrets, operation, input });
   }
 
-  async pauseDigitalEmployee(args) {
-    return this.lifecycleRequest('pause', args);
-  }
-
-  async resumeDigitalEmployee(args) {
-    return this.lifecycleRequest('resume', args);
-  }
-
-  async uninstallDigitalEmployee(args) {
-    return this.lifecycleRequest('uninstall', args);
-  }
+  async pauseDigitalEmployee(args) { return this.lifecycleRequest('pause', args); }
+  async resumeDigitalEmployee(args) { return this.lifecycleRequest('resume', args); }
+  async uninstallDigitalEmployee(args) { return this.lifecycleRequest('uninstall', args); }
 
   async lifecycleRequest(action, { connection, secrets, deploymentConnection }) {
     const operation = connection.configuration?.operations?.[action];
