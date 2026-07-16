@@ -6,9 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node seed.js",
+    "migrate:universal": "node scripts/migrateUniversal.js",
+    "seed": "node scripts/seedUniversal.js",
     "test": "node --test tests/*.test.js",
-    "check": "node --check server.js && node --check services/deploymentService.js && node --check routes/telemetry.js"
+    "check": "node --check server.js && node --check migrations/legacyUniversalMigration.js && node --check services/deploymentService.js && node --check routes/telemetry.js"
   },
   "dependencies": {
     "axios": "^1.18.1",
