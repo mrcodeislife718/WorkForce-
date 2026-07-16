@@ -21,6 +21,7 @@ const Deployment = sequelize.define('Deployment', {
   },
   runtime_configuration: { type: DataTypes.JSONB, defaultValue: {}, allowNull: false },
   availability_target: { type: DataTypes.STRING(20), defaultValue: '24/7/365', allowNull: false },
+  telemetry_token_hash: { type: DataTypes.STRING(64), allowNull: false },
   deployed_at: { type: DataTypes.DATE, allowNull: true },
   paused_at: { type: DataTypes.DATE, allowNull: true },
   uninstalled_at: { type: DataTypes.DATE, allowNull: true },
