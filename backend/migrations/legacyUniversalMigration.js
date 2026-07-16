@@ -29,9 +29,9 @@ async function resolveTable(queryInterface, expected) {
   return names.find((name) => String(name).toLowerCase() === expected.toLowerCase()) || null;
 }
 
-async function addColumnIfMissing(queryInterface, table, columns, name, definition) {
+async function addColumnIfMissing(queryInterface, table, columns, name, definition, transaction) {
   if (!columns[name]) {
-    await queryInterface.addColumn(table, name, definition);
+    await queryInterface.addColumn(table, name, definition, { transaction });
     columns[name] = definition;
   }
 }
@@ -41,14 +41,14 @@ async function migrateWorkerPermissions(queryInterface, transaction) {
   if (!table) return;
   const columns = await queryInterface.describeTable(table);
 
-  await addColumnIfMissing(queryInterface, table, columns, 'capability_key', { type: DataTypes.STRING(160), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'name', { type: DataTypes.STRING(160), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'description', { type: DataTypes.TEXT, allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'resource_type', { type: DataTypes.STRING(100), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'action', { type: DataTypes.STRING(40), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'risk_level', { type: DataTypes.STRING(20), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'requires_human_approval', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'constraints_schema', { type: DataTypes.JSONB, allowNull: false, defaultValue: {}, transaction });
+  await addColumnIfMissing(queryInterface, table, columns, 'capability_key', { type: DataTypes.STRING(160), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'name', { type: DataTypes.STRING(160), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'description', { type: DataTypes.TEXT, allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'resource_type', { type: DataTypes.STRING(100), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'action', { type: DataTypes.STRING(40), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'risk_level', { type: DataTypes.STRING(20), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'requires_human_approval', { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'constraints_schema', { type: DataTypes.JSONB, allowNull: false, defaultValue: {} }, transaction);
 
   const quoted = queryInterface.queryGenerator.quoteTable(table);
   const toolExpression = columns.tool ? '"tool"::text AS tool' : "'' AS tool";
@@ -92,30 +92,40 @@ async function migrateDeployments(queryInterface, transaction) {
   if (!table) return;
   const columns = await queryInterface.describeTable(table);
   const quoted = queryInterface.queryGenerator.quoteTable(table);
+  const hadLegacyFakeFields = Boolean(columns.tool || columns.workspace_id || columns.oauth_token_encrypted);
 
-  if (columns.status && String(columns.status.type).toUpperCase().includes('ENUM')) {
+  if (columns.status) {
+    await sequelize.query(`ALTER TABLE ${quoted} ALTER COLUMN "status" DROP DEFAULT`, { transaction });
     await sequelize.query(
       `ALTER TABLE ${quoted} ALTER COLUMN "status" TYPE VARCHAR(32) USING "status"::text`,
       { transaction },
     );
+    await sequelize.query(`ALTER TABLE ${quoted} ALTER COLUMN "status" SET DEFAULT 'draft'`, { transaction });
     await sequelize.query('DROP TYPE IF EXISTS "enum_Deployments_status"', { transaction });
   }
 
-  await addColumnIfMissing(queryInterface, table, columns, 'name', { type: DataTypes.STRING(255), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'workforce_level', { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'single', transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'team_id', { type: DataTypes.UUID, allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'department_id', { type: DataTypes.UUID, allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'manager_deployment_id', { type: DataTypes.UUID, allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'runtime_configuration', { type: DataTypes.JSONB, allowNull: false, defaultValue: {}, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'availability_target', { type: DataTypes.STRING(20), allowNull: false, defaultValue: '24/7/365', transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'telemetry_token_hash', { type: DataTypes.STRING(64), allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'paused_at', { type: DataTypes.DATE, allowNull: true, transaction });
-  await addColumnIfMissing(queryInterface, table, columns, 'uninstalled_at', { type: DataTypes.DATE, allowNull: true, transaction });
+  await addColumnIfMissing(queryInterface, table, columns, 'name', { type: DataTypes.STRING(255), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'workforce_level', { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'single' }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'team_id', { type: DataTypes.UUID, allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'department_id', { type: DataTypes.UUID, allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'manager_deployment_id', { type: DataTypes.UUID, allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'runtime_configuration', { type: DataTypes.JSONB, allowNull: false, defaultValue: {} }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'availability_target', { type: DataTypes.STRING(20), allowNull: false, defaultValue: '24/7/365' }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'telemetry_token_hash', { type: DataTypes.STRING(64), allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'paused_at', { type: DataTypes.DATE, allowNull: true }, transaction);
+  await addColumnIfMissing(queryInterface, table, columns, 'uninstalled_at', { type: DataTypes.DATE, allowNull: true }, transaction);
 
-  await sequelize.query(
-    `UPDATE ${quoted} SET "status" = CASE WHEN "status" = 'pending' THEN 'draft' ELSE "status" END`,
-    { transaction },
-  );
+  if (hadLegacyFakeFields) {
+    await sequelize.query(
+      `UPDATE ${quoted} SET "status" = CASE WHEN "status" = 'uninstalled' THEN 'uninstalled' ELSE 'draft' END, "deployed_at" = NULL`,
+      { transaction },
+    );
+  } else {
+    await sequelize.query(
+      `UPDATE ${quoted} SET "status" = CASE WHEN "status" = 'pending' THEN 'draft' ELSE "status" END`,
+      { transaction },
+    );
+  }
 
   const workersTable = await resolveTable(queryInterface, 'Workers');
   const workerJoin = workersTable
