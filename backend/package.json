@@ -1,7 +1,7 @@
 {
   "name": "orca-store-backend",
   "version": "1.0.0",
-  "description": "ORCA Store – AI worker distribution platform",
+  "description": "ORCA Store backend for a digital labor workforce of digital employees",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
