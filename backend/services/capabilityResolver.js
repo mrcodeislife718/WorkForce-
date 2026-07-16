@@ -1,8 +1,12 @@
 const { WorkerPermission, WorkspaceConnection, ConnectorDefinition } = require('../models');
 
-function manifestKeys(definition) {
-  const capabilities = definition?.capability_manifest?.capabilities || [];
-  return new Set(capabilities.map((capability) => capability.key));
+function capabilityKeys(connection) {
+  const definitionCapabilities = connection?.ConnectorDefinition?.capability_manifest?.capabilities || [];
+  const connectionCapabilities = connection?.configuration?.capabilities || [];
+  return new Set([
+    ...definitionCapabilities.map((capability) => typeof capability === 'string' ? capability : capability.key),
+    ...connectionCapabilities.map((capability) => typeof capability === 'string' ? capability : capability.key),
+  ].filter(Boolean));
 }
 
 async function getDigitalEmployeeRequirements(workerId) {
@@ -21,7 +25,7 @@ async function getCompatibleConnections(userId, workerId) {
   });
 
   return connections.map((connection) => {
-    const supported = manifestKeys(connection.ConnectorDefinition);
+    const supported = capabilityKeys(connection);
     const satisfied = requirements.filter((requirement) => supported.has(requirement.capability_key));
     return {
       connection,
@@ -33,11 +37,9 @@ async function getCompatibleConnections(userId, workerId) {
   });
 }
 
-function validateCapabilityAssignments(requirements, assignments, connectionDefinitions) {
+function validateCapabilityAssignments(requirements, assignments, connections) {
   const assignmentByCapability = new Map(assignments.map((item) => [item.capability_key, item]));
-  const definitionByConnection = new Map(
-    connectionDefinitions.map(({ connectionId, definition }) => [connectionId, definition]),
-  );
+  const connectionById = new Map(connections.map((connection) => [connection.id, connection]));
   const errors = [];
 
   for (const requirement of requirements) {
@@ -50,13 +52,13 @@ function validateCapabilityAssignments(requirements, assignments, connectionDefi
       if (requirement.is_required) errors.push(`Required capability was not approved: ${requirement.capability_key}`);
       continue;
     }
-    const definition = definitionByConnection.get(assignment.connection_id);
-    if (!definition) {
+    const connection = connectionById.get(assignment.connection_id);
+    if (!connection) {
       errors.push(`Connection was not supplied for capability: ${requirement.capability_key}`);
       continue;
     }
-    if (!manifestKeys(definition).has(requirement.capability_key)) {
-      errors.push(`${definition.name} does not provide ${requirement.capability_key}`);
+    if (!capabilityKeys(connection).has(requirement.capability_key)) {
+      errors.push(`${connection.ConnectorDefinition.name} does not provide ${requirement.capability_key}`);
     }
   }
 
@@ -64,6 +66,7 @@ function validateCapabilityAssignments(requirements, assignments, connectionDefi
 }
 
 module.exports = {
+  capabilityKeys,
   getDigitalEmployeeRequirements,
   getCompatibleConnections,
   validateCapabilityAssignments,
