@@ -8,141 +8,200 @@ const auth = require('./middleware/auth');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
-const app = express();
+const connectorRoutes = require('./routes/connectors');
+const connectionRoutes = require('./routes/connections');
+const deploymentRoutes = require('./routes/deployments');
+const telemetryRoutes = require('./routes/telemetry');
+const consoleRoutes = require('./routes/console');
 
-// Middleware
-app.use(cors());
+const app = express();
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by ORCA.'));
+  },
+  credentials: true,
+}));
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self' http://localhost:5173 http://localhost:5000; connect-src 'self' http://localhost:5173 http://localhost:5000;");
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
-// ---------- AUTH (simple signup/login for testing) ----------
+function signToken(user) {
+  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET must be configured.');
+  return jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '12h' });
+}
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    await sequelize.authenticate();
+    return res.json({ status: 'ok', service: 'orca-store-backend' });
+  } catch (error) {
+    return res.status(503).json({ status: 'error', service: 'orca-store-backend' });
+  }
+});
+
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
-    const hashed = await bcrypt.hash(password, 10);
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    const name = String(req.body.name || '').trim();
+    if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must contain at least 8 characters.' });
+    const existing = await User.findOne({ where: { email } });
+    if (existing) return res.status(409).json({ error: 'An account with this email already exists.' });
+    const hashed = await bcrypt.hash(password, 12);
     const user = await User.create({ email, password: hashed, name });
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
-    res.json({ token, user: { id: user.id, email, name } });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
+    return res.status(201).json({
+      token: signToken(user),
+      user: { id: user.id, email: user.email, name: user.name },
+    });
+  } catch (error) {
+    return res.status(400).json({ error: 'Unable to create account.' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
-    res.json({ token, user: { id: user.id, email, name: user.name } });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+    return res.json({
+      token: signToken(user),
+      user: { id: user.id, email: user.email, name: user.name },
+    });
+  } catch (error) {
+    return res.status(400).json({ error: 'Unable to sign in.' });
   }
 });
 
-// ---------- STORE FRONT (public) ----------
-app.get('/api/store/top-deployed', async (req, res) => {
-  const workers = await Worker.findAll({
-    where: { status: 'published' },
-    order: [['total_deployments', 'DESC']],
-    limit: 10,
-  });
-  res.json(workers);
+app.get('/api/auth/me', auth, async (req, res) => {
+  return res.json({ user: { id: req.user.id, email: req.user.email, name: req.user.name } });
 });
 
-app.get('/api/store/trending', async (req, res) => {
-  const workers = await Worker.findAll({
-    where: { status: 'published' },
-    order: [['updatedAt', 'DESC']],
-    limit: 10,
-  });
-  res.json(workers);
+app.get('/api/store/top-deployed', async (_req, res) => {
+  try {
+    const workers = await Worker.findAll({
+      where: { status: 'published' },
+      order: [['total_deployments', 'DESC']],
+      limit: 10,
+    });
+    return res.json(workers);
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to load digital employees.' });
+  }
 });
 
-app.get('/api/store/editors-choice', async (req, res) => {
-  const workers = await Worker.findAll({
-    where: { status: 'published' },
-    limit: 3,
-    order: sequelize.random(),
-  });
-  res.json(workers);
+app.get('/api/store/trending', async (_req, res) => {
+  try {
+    const workers = await Worker.findAll({
+      where: { status: 'published' },
+      order: [['updatedAt', 'DESC']],
+      limit: 10,
+    });
+    return res.json(workers);
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to load digital employees.' });
+  }
+});
+
+app.get('/api/store/editors-choice', async (_req, res) => {
+  try {
+    const workers = await Worker.findAll({
+      where: { status: 'published' },
+      limit: 3,
+      order: sequelize.random(),
+    });
+    return res.json(workers);
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to load digital employees.' });
+  }
 });
 
 app.get('/api/store/search', async (req, res) => {
-  const { q } = req.query;
-  const workers = await Worker.findAll({
-    where: {
-      status: 'published',
-      [Op.or]: [
+  try {
+    const q = String(req.query.q || '').trim();
+    const where = { status: 'published' };
+    if (q) {
+      where[Op.or] = [
         { name: { [Op.iLike]: `%${q}%` } },
         { description: { [Op.iLike]: `%${q}%` } },
-      ],
-    },
-  });
-  res.json(workers);
+      ];
+    }
+    return res.json(await Worker.findAll({ where, limit: 50 }));
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to search digital employees.' });
+  }
 });
 
-// ---------- WORKER DETAIL ----------
 app.get('/api/workers/:id', async (req, res) => {
-  const worker = await Worker.findByPk(req.params.id, {
-    include: [WorkerPermission],
-  });
-  if (!worker) return res.status(404).json({ error: 'Worker not found' });
-  res.json(worker);
+  try {
+    const worker = await Worker.findByPk(req.params.id, { include: [WorkerPermission] });
+    if (!worker) return res.status(404).json({ error: 'Digital employee was not found.' });
+    return res.json(worker);
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to load digital employee.' });
+  }
 });
 
 app.get('/api/workers/:id/reviews', async (req, res) => {
-  const reviews = await Review.findAll({
-    include: [{ model: Deployment, include: [User] }],
-    where: { '$Deployment.worker_id$': req.params.id },
-    limit: 20,
-    order: [['createdAt', 'DESC']],
-  });
-  res.json(reviews);
+  try {
+    const reviews = await Review.findAll({
+      include: [{ model: Deployment, include: [User] }],
+      where: { '$Deployment.worker_id$': req.params.id },
+      limit: 20,
+      order: [['createdAt', 'DESC']],
+    });
+    return res.json(reviews);
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to load reviews.' });
+  }
 });
 
-// ---------- DEPLOYMENTS (protected) ----------
-app.post('/api/deployments/initiate', auth, async (req, res) => {
-  const { worker_id, tool } = req.body;
-  const deployment = await Deployment.create({
-    user_id: req.user.id,
-    worker_id,
-    tool,
-    status: 'active',
-    workspace_id: 'test_workspace',
-    oauth_token_encrypted: 'dummy_token',
-  });
-  await Worker.increment('total_deployments', { by: 1, where: { id: worker_id } });
-  res.json(deployment);
+app.use('/api/connectors', connectorRoutes);
+app.use('/api/connections', connectionRoutes);
+app.use('/api/deployments', deploymentRoutes);
+app.use('/api/telemetry', telemetryRoutes);
+app.use('/api/console', consoleRoutes);
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  return res.status(500).json({ error: 'ORCA encountered an unexpected error.' });
 });
 
-app.get('/api/console/deployments', auth, async (req, res) => {
-  const deployments = await Deployment.findAll({
-    where: { user_id: req.user.id, status: { [Op.ne]: 'uninstalled' } },
-    include: [Worker],
-  });
-  res.json(deployments);
-});
+async function prepareDatabase() {
+  const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
+  if (syncMode === 'alter') {
+    await sequelize.sync({ alter: true });
+  } else if (syncMode === 'create') {
+    await sequelize.sync();
+  } else {
+    await sequelize.authenticate();
+  }
+}
 
-app.delete('/api/deployments/:id', auth, async (req, res) => {
-  const deployment = await Deployment.findOne({
-    where: { id: req.params.id, user_id: req.user.id },
-  });
-  if (!deployment) return res.status(404).json({ error: 'Not found' });
-  deployment.status = 'uninstalled';
-  await deployment.save();
-  res.json({ success: true });
-});
+async function start() {
+  await prepareDatabase();
+  const port = Number(process.env.PORT || 5000);
+  app.listen(port, () => console.log(`ORCA backend running on port ${port}`));
+}
 
-// ---------- SYNC DATABASE & START SERVER ----------
-sequelize.sync({ alter: true }).then(() => {
-  console.log('Database synced');
-  app.listen(process.env.PORT || 5000, () => {
-    console.log(`Server running on port ${process.env.PORT || 5000}`);
+if (require.main === module) {
+  start().catch((error) => {
+    console.error('ORCA backend failed to start:', error);
+    process.exit(1);
   });
-});
+}
+
+module.exports = { app, start, prepareDatabase };
