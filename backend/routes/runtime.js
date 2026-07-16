@@ -1,7 +1,8 @@
 const express = require('express');
 const auth = require('../middleware/auth');
 const deploymentTokenAuth = require('../middleware/deploymentTokenAuth');
-const { Deployment, RuntimeJob, TaskRun } = require('../models');
+const { Deployment, Worker, RuntimeJob, TaskRun } = require('../models');
+const { hasEntitlement } = require('../services/billingService');
 
 const router = express.Router();
 
@@ -23,6 +24,13 @@ async function enqueue(deployment, payload) {
   if (deployment.status !== 'active') {
     throw new Error('Digital employee deployment is not active.');
   }
+  const worker = deployment.Worker || await Worker.findByPk(deployment.worker_id);
+  if (!worker) throw new Error('Digital employee was not found.');
+  const entitlement = await hasEntitlement(deployment.user_id, worker);
+  if (!entitlement.entitled) {
+    await deployment.update({ status: 'paused', paused_at: new Date() });
+    throw new Error('Digital employee subscription is not active. The deployment was paused.');
+  }
   return RuntimeJob.create({
     deployment_id: deployment.id,
     job_type: 'deployment_task',
@@ -35,7 +43,8 @@ async function enqueue(deployment, payload) {
 
 router.post('/deployments/:deploymentId/tasks', deploymentTokenAuth, async (req, res) => {
   try {
-    const job = await enqueue(req.deployment, taskPayload(req.body));
+    const deployment = await Deployment.findByPk(req.deployment.id, { include: [Worker] });
+    const job = await enqueue(deployment, taskPayload(req.body));
     return res.status(202).json({ job_id: job.id, status: job.status });
   } catch (error) {
     return res.status(409).json({ error: error.message || 'Unable to queue task.' });
@@ -46,6 +55,7 @@ router.post('/assign/:deploymentId', auth, async (req, res) => {
   try {
     const deployment = await Deployment.findOne({
       where: { id: req.params.deploymentId, user_id: req.user.id },
+      include: [Worker],
     });
     if (!deployment) return res.status(404).json({ error: 'Deployment was not found.' });
     const job = await enqueue(deployment, { ...taskPayload(req.body), trigger_type: 'customer_assigned' });
