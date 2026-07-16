@@ -17,11 +17,9 @@ class GenericWebhookConnector extends ConnectorAdapter {
     if (!url) throw new Error('webhook_url is required.');
     if (!secrets.webhook_secret) throw new Error('Webhook secret is missing.');
     await assertSafeUrl(url, connection.configuration?.allowed_hosts || []);
-
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const body = JSON.stringify({ event_type: eventType, payload });
     const signature = sign(secrets.webhook_secret, timestamp, body);
-
     const response = await axios.post(url, body, {
       headers: {
         'Content-Type': 'application/json',
@@ -33,8 +31,15 @@ class GenericWebhookConnector extends ConnectorAdapter {
       maxBodyLength: Number(process.env.CONNECTOR_MAX_RESPONSE_BYTES || 5242880),
       validateStatus: (status) => status >= 200 && status < 300,
     });
-
-    return { ok: true, status: response.status, data: response.data };
+    return {
+      ok: true,
+      status: response.status,
+      data: response.data,
+      records_read: Number(response.data?.records_read || 0),
+      records_created: Number(response.data?.records_created || 0),
+      records_updated: Number(response.data?.records_updated || 0),
+      records_deleted: Number(response.data?.records_deleted || 0),
+    };
   }
 
   async validateConnection({ connection, secrets }) {
@@ -46,11 +51,8 @@ class GenericWebhookConnector extends ConnectorAdapter {
         eventType: 'orca.connection.verify',
         payload: { challenge },
       });
-      if (connection.configuration?.require_challenge_echo !== false) {
-        const returned = response.data?.challenge;
-        if (returned !== challenge) {
-          throw new Error('Webhook did not return the ORCA verification challenge.');
-        }
+      if (connection.configuration?.require_challenge_echo !== false && response.data?.challenge !== challenge) {
+        throw new Error('Webhook did not return the ORCA verification challenge.');
       }
       return { ok: true, provider_response_status: response.status };
     } catch (error) {
@@ -58,19 +60,9 @@ class GenericWebhookConnector extends ConnectorAdapter {
     }
   }
 
-  async discoverResources() {
-    return [];
-  }
+  async discoverResources() { return []; }
 
-  async installDigitalEmployee({
-    connection,
-    secrets,
-    worker,
-    deployment,
-    grants,
-    selectedResourceIds,
-    telemetryToken,
-  }) {
+  async installDigitalEmployee({ connection, secrets, worker, deployment, grants, selectedResourceIds, telemetryToken }) {
     const response = await this.deliver({
       connection,
       secrets,
@@ -78,21 +70,17 @@ class GenericWebhookConnector extends ConnectorAdapter {
       payload: {
         orca_deployment_id: deployment.id,
         digital_employee: { id: worker.id, name: worker.name, version: worker.version },
-        approved_capabilities: grants.map((grant) => ({
-          key: grant.capability_key,
-          constraints: grant.constraints || {},
-        })),
+        approved_capabilities: grants.map((grant) => ({ key: grant.capability_key, constraints: grant.constraints || {} })),
         selected_resource_ids: selectedResourceIds,
-        telemetry: {
-          url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+        orca_control_plane: {
+          telemetry_url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+          task_intake_url: `${process.env.PUBLIC_API_URL || ''}/api/runtime/deployments/${deployment.id}/tasks`,
           bearer_token: telemetryToken,
         },
       },
     });
     const externalInstallationId = response.data?.installation_id || response.data?.id;
-    if (!externalInstallationId) {
-      throw new Error('Webhook install response did not return installation_id or id.');
-    }
+    if (!externalInstallationId) throw new Error('Webhook install response did not return installation_id or id.');
     return { ok: true, external_installation_id: String(externalInstallationId) };
   }
 
@@ -107,9 +95,10 @@ class GenericWebhookConnector extends ConnectorAdapter {
 
   async pauseDigitalEmployee(args) { return this.lifecycle('pause', args); }
   async resumeDigitalEmployee(args) { return this.lifecycle('resume', args); }
+  async updateDigitalEmployee(args) { return this.lifecycle('update', args); }
   async uninstallDigitalEmployee(args) { return this.lifecycle('uninstall', args); }
 
-  async lifecycle(action, { connection, secrets, deploymentConnection }) {
+  async lifecycle(action, { connection, secrets, deploymentConnection, worker }) {
     return this.deliver({
       connection,
       secrets,
@@ -117,6 +106,7 @@ class GenericWebhookConnector extends ConnectorAdapter {
       payload: {
         orca_deployment_id: deploymentConnection.deployment_id,
         external_installation_id: deploymentConnection.external_installation_id,
+        digital_employee_version: worker?.version || undefined,
       },
     });
   }
