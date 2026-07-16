@@ -11,9 +11,15 @@ const migrateLegacyUniversalSchema = require('./migrations/legacyUniversalMigrat
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
+const interviewRoutes = require('./routes/interviews');
+const sampleAssignmentRoutes = require('./routes/sampleAssignments');
 const deploymentRoutes = require('./routes/deployments');
 const telemetryRoutes = require('./routes/telemetry');
 const consoleRoutes = require('./routes/console');
+const runtimeRoutes = require('./routes/runtime');
+const approvalRoutes = require('./routes/approvals');
+const { router: billingRoutes, webhook: billingWebhook } = require('./routes/billing');
+const { startRuntimeWorker, stopRuntimeWorker } = require('./runtime/JobRunner');
 
 const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
@@ -34,6 +40,8 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
+
+app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), billingWebhook);
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
 function signToken(user) {
@@ -93,12 +101,11 @@ app.get('/api/auth/me', auth, async (req, res) => {
 
 app.get('/api/store/top-deployed', async (_req, res) => {
   try {
-    const workers = await Worker.findAll({
+    return res.json(await Worker.findAll({
       where: { status: 'published' },
       order: [['total_deployments', 'DESC']],
       limit: 10,
-    });
-    return res.json(workers);
+    }));
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load digital employees.' });
   }
@@ -106,12 +113,11 @@ app.get('/api/store/top-deployed', async (_req, res) => {
 
 app.get('/api/store/trending', async (_req, res) => {
   try {
-    const workers = await Worker.findAll({
+    return res.json(await Worker.findAll({
       where: { status: 'published' },
       order: [['updatedAt', 'DESC']],
       limit: 10,
-    });
-    return res.json(workers);
+    }));
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load digital employees.' });
   }
@@ -119,12 +125,11 @@ app.get('/api/store/trending', async (_req, res) => {
 
 app.get('/api/store/editors-choice', async (_req, res) => {
   try {
-    const workers = await Worker.findAll({
+    return res.json(await Worker.findAll({
       where: { status: 'published' },
       limit: 3,
       order: sequelize.random(),
-    });
-    return res.json(workers);
+    }));
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load digital employees.' });
   }
@@ -172,7 +177,12 @@ app.get('/api/workers/:id/reviews', async (req, res) => {
 
 app.use('/api/connectors', connectorRoutes);
 app.use('/api/connections', connectionRoutes);
+app.use('/api/interviews', interviewRoutes);
+app.use('/api/sample-assignments', sampleAssignmentRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/deployments', deploymentRoutes);
+app.use('/api/runtime', runtimeRoutes);
+app.use('/api/approvals', approvalRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/console', consoleRoutes);
 
@@ -183,23 +193,27 @@ app.use((error, _req, res, _next) => {
 
 async function prepareDatabase() {
   await sequelize.authenticate();
-
-  if (process.env.RUN_LEGACY_MIGRATIONS !== 'false') {
-    await migrateLegacyUniversalSchema();
-  }
-
+  if (process.env.RUN_LEGACY_MIGRATIONS !== 'false') await migrateLegacyUniversalSchema();
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
-  if (syncMode === 'alter') {
-    await sequelize.sync({ alter: true });
-  } else if (syncMode === 'create') {
-    await sequelize.sync();
-  }
+  if (syncMode === 'alter') await sequelize.sync({ alter: true });
+  else if (syncMode === 'create') await sequelize.sync();
 }
 
 async function start() {
   await prepareDatabase();
+  startRuntimeWorker();
   const port = Number(process.env.PORT || 5000);
-  app.listen(port, () => console.log(`ORCA backend running on port ${port}`));
+  const server = app.listen(port, () => console.log(`ORCA backend running on port ${port}`));
+  const shutdown = async () => {
+    stopRuntimeWorker();
+    server.close(async () => {
+      await sequelize.close().catch(() => {});
+      process.exit(0);
+    });
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  return server;
 }
 
 if (require.main === module) {
