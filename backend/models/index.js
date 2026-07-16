@@ -11,6 +11,12 @@ const DeploymentCapabilityGrant = require('./DeploymentCapabilityGrant');
 const DeploymentEvent = require('./DeploymentEvent');
 const TaskRun = require('./TaskRun');
 const CapabilityExecution = require('./CapabilityExecution');
+const InterviewSession = require('./InterviewSession');
+const InterviewMessage = require('./InterviewMessage');
+const SampleAssignment = require('./SampleAssignment');
+const Subscription = require('./Subscription');
+const RuntimeJob = require('./RuntimeJob');
+const ApprovalRequest = require('./ApprovalRequest');
 const Review = require('./Review');
 
 Worker.hasMany(WorkerPermission, { foreignKey: 'worker_id' });
@@ -18,22 +24,36 @@ WorkerPermission.belongsTo(Worker, { foreignKey: 'worker_id' });
 
 User.hasMany(WorkspaceConnection, { foreignKey: 'user_id' });
 WorkspaceConnection.belongsTo(User, { foreignKey: 'user_id' });
-
 ConnectorDefinition.hasMany(WorkspaceConnection, { foreignKey: 'connector_definition_id' });
 WorkspaceConnection.belongsTo(ConnectorDefinition, { foreignKey: 'connector_definition_id' });
-
 WorkspaceConnection.hasMany(ConnectionSecret, { foreignKey: 'workspace_connection_id' });
 ConnectionSecret.belongsTo(WorkspaceConnection, { foreignKey: 'workspace_connection_id' });
-
 WorkspaceConnection.hasMany(WorkspaceResource, { foreignKey: 'workspace_connection_id' });
 WorkspaceResource.belongsTo(WorkspaceConnection, { foreignKey: 'workspace_connection_id' });
 
+User.hasMany(InterviewSession, { foreignKey: 'user_id' });
+InterviewSession.belongsTo(User, { foreignKey: 'user_id' });
+Worker.hasMany(InterviewSession, { foreignKey: 'worker_id' });
+InterviewSession.belongsTo(Worker, { foreignKey: 'worker_id' });
+InterviewSession.hasMany(InterviewMessage, { foreignKey: 'interview_session_id' });
+InterviewMessage.belongsTo(InterviewSession, { foreignKey: 'interview_session_id' });
+
+User.hasMany(SampleAssignment, { foreignKey: 'user_id' });
+SampleAssignment.belongsTo(User, { foreignKey: 'user_id' });
+Worker.hasMany(SampleAssignment, { foreignKey: 'worker_id' });
+SampleAssignment.belongsTo(Worker, { foreignKey: 'worker_id' });
+InterviewSession.hasMany(SampleAssignment, { foreignKey: 'interview_session_id' });
+SampleAssignment.belongsTo(InterviewSession, { foreignKey: 'interview_session_id' });
+
+User.hasMany(Subscription, { foreignKey: 'user_id' });
+Subscription.belongsTo(User, { foreignKey: 'user_id' });
+Worker.hasMany(Subscription, { foreignKey: 'worker_id' });
+Subscription.belongsTo(Worker, { foreignKey: 'worker_id' });
+
 User.hasMany(Deployment, { foreignKey: 'user_id' });
 Deployment.belongsTo(User, { foreignKey: 'user_id' });
-
 Worker.hasMany(Deployment, { foreignKey: 'worker_id' });
 Deployment.belongsTo(Worker, { foreignKey: 'worker_id' });
-
 Deployment.belongsTo(Deployment, { as: 'ManagerDeployment', foreignKey: 'manager_deployment_id' });
 Deployment.hasMany(Deployment, { as: 'ManagedDeployments', foreignKey: 'manager_deployment_id' });
 
@@ -54,13 +74,21 @@ DeploymentEvent.belongsTo(DeploymentConnection, { foreignKey: 'deployment_connec
 
 Deployment.hasMany(TaskRun, { foreignKey: 'deployment_id' });
 TaskRun.belongsTo(Deployment, { foreignKey: 'deployment_id' });
-
 Deployment.hasMany(CapabilityExecution, { foreignKey: 'deployment_id' });
 CapabilityExecution.belongsTo(Deployment, { foreignKey: 'deployment_id' });
 DeploymentConnection.hasMany(CapabilityExecution, { foreignKey: 'deployment_connection_id' });
 CapabilityExecution.belongsTo(DeploymentConnection, { foreignKey: 'deployment_connection_id' });
 TaskRun.hasMany(CapabilityExecution, { foreignKey: 'task_run_id' });
 CapabilityExecution.belongsTo(TaskRun, { foreignKey: 'task_run_id' });
+
+Deployment.hasMany(RuntimeJob, { foreignKey: 'deployment_id' });
+RuntimeJob.belongsTo(Deployment, { foreignKey: 'deployment_id' });
+SampleAssignment.hasMany(RuntimeJob, { foreignKey: 'sample_assignment_id' });
+RuntimeJob.belongsTo(SampleAssignment, { foreignKey: 'sample_assignment_id' });
+Deployment.hasMany(ApprovalRequest, { foreignKey: 'deployment_id' });
+ApprovalRequest.belongsTo(Deployment, { foreignKey: 'deployment_id' });
+RuntimeJob.hasMany(ApprovalRequest, { foreignKey: 'runtime_job_id' });
+ApprovalRequest.belongsTo(RuntimeJob, { foreignKey: 'runtime_job_id' });
 
 Deployment.hasOne(Review, { foreignKey: 'deployment_id' });
 Review.belongsTo(Deployment, { foreignKey: 'deployment_id' });
@@ -73,11 +101,17 @@ module.exports = {
   WorkspaceConnection,
   ConnectionSecret,
   WorkspaceResource,
+  InterviewSession,
+  InterviewMessage,
+  SampleAssignment,
+  Subscription,
   Deployment,
   DeploymentConnection,
   DeploymentCapabilityGrant,
   DeploymentEvent,
   TaskRun,
   CapabilityExecution,
+  RuntimeJob,
+  ApprovalRequest,
   Review,
 };
