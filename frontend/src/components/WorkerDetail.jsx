@@ -46,9 +46,14 @@ export default function WorkerDetail() {
         <span className="text-sm bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-3 py-1 rounded-full">24/7/365</span>
       </div>
 
-      <button onClick={() => navigate(`/deploy/${worker.id}`)} className="w-full mt-4 bg-orca-deep-blue hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-3 rounded-full transition text-lg">
-        Deploy into the tools you use
+      <button onClick={() => navigate(`/interview/${worker.id}`)} className="w-full mt-4 bg-orca-deep-blue hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-3 rounded-full transition text-lg">
+        Interview this digital employee
       </button>
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 text-center text-xs" style={{ color: 'var(--text-secondary)' }}>
+        {['Interview', 'Sample work', 'Purchase', 'Connect tools', 'Deploy'].map((step, index) => (
+          <div key={step} className="rounded-lg border px-2 py-2" style={{ borderColor: 'var(--border-color)' }}>{index + 1}. {step}</div>
+        ))}
+      </div>
 
       <section className="mt-6">
         <h2 className="font-bold text-lg">Capabilities and permissions</h2>
