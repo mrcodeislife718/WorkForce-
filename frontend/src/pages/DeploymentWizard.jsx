@@ -6,6 +6,7 @@ export default function DeploymentWizard() {
   const { workerId } = useParams()
   const navigate = useNavigate()
   const [worker, setWorker] = useState(null)
+  const [eligibility, setEligibility] = useState(null)
   const [requirements, setRequirements] = useState([])
   const [connectionOptions, setConnectionOptions] = useState([])
   const [assignments, setAssignments] = useState({})
@@ -25,10 +26,11 @@ export default function DeploymentWizard() {
         ])
         if (cancelled) return
         const loadedWorker = workerResponse.data
-        const loadedRequirements = prepareResponse.data.requirements
-        const loadedConnections = prepareResponse.data.connections
+        const loadedRequirements = prepareResponse.data.requirements || []
+        const loadedConnections = prepareResponse.data.connections || []
         setWorker(loadedWorker)
         setName(loadedWorker.name)
+        setEligibility(prepareResponse.data.eligibility)
         setRequirements(loadedRequirements)
         setConnectionOptions(loadedConnections)
 
@@ -89,7 +91,10 @@ export default function DeploymentWizard() {
   const submit = async (event) => {
     event.preventDefault()
     setError('')
-
+    if (!eligibility?.eligible) {
+      setError('Interview, sample work, and purchase must all be complete before deployment.')
+      return
+    }
     const missingRequired = requirements.filter((requirement) => {
       const assignment = assignments[requirement.capability_key]
       return requirement.is_required && (!assignment?.approved || !assignment?.connection_id)
@@ -131,6 +136,27 @@ export default function DeploymentWizard() {
 
   if (!worker && !error) return <div className="max-w-5xl mx-auto px-4 py-12">Preparing deployment…</div>
 
+  if (eligibility && !eligibility.eligible) {
+    const linkFor = (blocker) => {
+      if (blocker.code === 'INTERVIEW_REQUIRED') return `/interview/${workerId}`
+      if (blocker.code === 'SAMPLE_REVIEW_REQUIRED') return eligibility.interview_id ? `/sample/${workerId}?interview_id=${eligibility.interview_id}` : `/interview/${workerId}`
+      return `/purchase/${workerId}`
+    }
+    return (
+      <main className="max-w-3xl mx-auto px-4 py-10">
+        <h1 className="text-3xl font-bold">Finish the hiring steps first</h1>
+        <p className="mt-2 mb-6" style={{ color: 'var(--text-secondary)' }}>ORCA will not skip evaluation or billing and create a fake active deployment.</p>
+        <div className="space-y-3">
+          {eligibility.blockers.map((blocker) => (
+            <Link key={blocker.code} to={linkFor(blocker)} className="block rounded-xl border p-4 font-semibold" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+              {blocker.message} →
+            </Link>
+          ))}
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold">Deploy {worker?.name || 'digital employee'}</h1>
@@ -167,36 +193,22 @@ export default function DeploymentWizard() {
                         <p className="text-xs mt-2">{requirement.capability_key} · {requirement.risk_level} risk · {requirement.is_required ? 'required' : 'optional'}</p>
                       </div>
                       <label className="flex items-center gap-2 text-sm font-semibold">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(assignment.approved)}
-                          disabled={requirement.is_required}
-                          onChange={(event) => updateAssignment(requirement.capability_key, { approved: event.target.checked })}
-                        />
+                        <input type="checkbox" checked={Boolean(assignment.approved)} disabled={requirement.is_required} onChange={(event) => updateAssignment(requirement.capability_key, { approved: event.target.checked })} />
                         Approve
                       </label>
                     </div>
                     {assignment.approved && (
                       <label className="block mt-3">
                         <span className="block text-sm font-semibold mb-1">Use this real connection</span>
-                        <select
-                          className="w-full rounded-lg border px-3 py-2"
-                          value={assignment.connection_id || ''}
-                          onChange={(event) => updateAssignment(requirement.capability_key, { connection_id: event.target.value })}
-                          required={requirement.is_required}
-                        >
+                        <select className="w-full rounded-lg border px-3 py-2" value={assignment.connection_id || ''} onChange={(event) => updateAssignment(requirement.capability_key, { connection_id: event.target.value })} required={requirement.is_required}>
                           <option value="">Select a compatible connection</option>
                           {compatible.map((item) => (
-                            <option key={item.connection.id} value={item.connection.id}>
-                              {item.connection.workspace_name} — {item.connection.ConnectorDefinition?.name}
-                            </option>
+                            <option key={item.connection.id} value={item.connection.id}>{item.connection.workspace_name} — {item.connection.ConnectorDefinition?.name}</option>
                           ))}
                         </select>
                       </label>
                     )}
-                    {assignment.approved && compatible.length === 0 && (
-                      <p className="mt-3 text-sm text-red-600">No connected platform currently provides this capability.</p>
-                    )}
+                    {assignment.approved && compatible.length === 0 && <p className="mt-3 text-sm text-red-600">No connected platform currently provides this capability.</p>}
                   </article>
                 )
               })}
@@ -211,7 +223,7 @@ export default function DeploymentWizard() {
                 <h2 className="text-xl font-bold">Resources in {option?.connection.workspace_name}</h2>
                 <p className="text-sm mt-1 mb-3" style={{ color: 'var(--text-secondary)' }}>Select only the channels, inboxes, stores, folders, or other resources this digital employee may use.</p>
                 {availableResources.length === 0 ? (
-                  <p className="text-sm">This connection reported no selectable resources. Its approved capabilities still remain limited by the connection configuration.</p>
+                  <p className="text-sm">This connection reported no selectable resources. Its approved capabilities remain limited by the connection configuration.</p>
                 ) : (
                   <div className="grid sm:grid-cols-2 gap-2">
                     {availableResources.map((resource) => (
@@ -228,7 +240,7 @@ export default function DeploymentWizard() {
 
           <section className="rounded-2xl border p-5" style={{ borderColor: 'var(--border-color)' }}>
             <h2 className="text-xl font-bold">Final deployment check</h2>
-            <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>ORCA will revalidate every real connection, install the digital employee through each selected adapter, issue a protected telemetry credential, and mark it active only after every installation succeeds.</p>
+            <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>ORCA will revalidate every real connection, install the digital employee through each selected adapter, issue a protected runtime credential, and mark it active only after every installation succeeds.</p>
             <button className="mt-4 w-full rounded-lg bg-orca-deep-blue text-white font-bold py-3 disabled:opacity-50" disabled={submitting}>
               {submitting ? 'Installing and validating…' : 'Deploy digital employee'}
             </button>
