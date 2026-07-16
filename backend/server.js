@@ -7,6 +7,7 @@ const { User, Worker, WorkerPermission, Deployment, Review } = require('./models
 const auth = require('./middleware/auth');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const migrateLegacyUniversalSchema = require('./migrations/legacyUniversalMigration');
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
@@ -181,13 +182,17 @@ app.use((error, _req, res, _next) => {
 });
 
 async function prepareDatabase() {
+  await sequelize.authenticate();
+
+  if (process.env.RUN_LEGACY_MIGRATIONS !== 'false') {
+    await migrateLegacyUniversalSchema();
+  }
+
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
   if (syncMode === 'alter') {
     await sequelize.sync({ alter: true });
   } else if (syncMode === 'create') {
     await sequelize.sync();
-  } else {
-    await sequelize.authenticate();
   }
 }
 
