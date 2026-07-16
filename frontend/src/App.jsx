@@ -14,6 +14,10 @@ import PolicyCenter from './components/PolicyCenter.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
 import Connections from './pages/Connections.jsx'
+import Interview from './pages/Interview.jsx'
+import SampleWork from './pages/SampleWork.jsx'
+import Purchase from './pages/Purchase.jsx'
+import PurchaseSuccess from './pages/PurchaseSuccess.jsx'
 import DeploymentWizard from './pages/DeploymentWizard.jsx'
 
 function App() {
@@ -34,11 +38,15 @@ function App() {
               <Route path="/worker/:id" element={<WorkerDetail />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/interview/:workerId" element={<ProtectedRoute><Interview /></ProtectedRoute>} />
+              <Route path="/sample/:workerId" element={<ProtectedRoute><SampleWork /></ProtectedRoute>} />
+              <Route path="/purchase/:workerId" element={<ProtectedRoute><Purchase /></ProtectedRoute>} />
+              <Route path="/purchase/success" element={<ProtectedRoute><PurchaseSuccess /></ProtectedRoute>} />
               <Route path="/deploy/:workerId" element={<ProtectedRoute><DeploymentWizard /></ProtectedRoute>} />
               <Route path="/connections" element={<ProtectedRoute><Connections /></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><Console /></ProtectedRoute>} />
               <Route path="/protect" element={<Protect />} />
-              <Route path="/billing" element={<Billing />} />
+              <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
               <Route path="/payouts" element={<Payouts />} />
               <Route path="/policy-center" element={<PolicyCenter />} />
             </Routes>
