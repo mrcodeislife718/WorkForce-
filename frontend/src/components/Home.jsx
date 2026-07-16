@@ -1,108 +1,110 @@
-import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../api/client'
 import WorkerCard from './WorkerCard.jsx'
 
 export default function Home() {
+  const navigate = useNavigate()
   const [topWorkers, setTopWorkers] = useState([])
   const [trending, setTrending] = useState([])
   const [editorsPick, setEditorsPick] = useState([])
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [top, trend, editors] = await Promise.all([
-          axios.get('/api/store/top-deployed'),
-          axios.get('/api/store/trending'),
-          axios.get('/api/store/editors-choice'),
+          api.get('/api/store/top-deployed'),
+          api.get('/api/store/trending'),
+          api.get('/api/store/editors-choice'),
         ])
         setTopWorkers(top.data)
         setTrending(trend.data)
         setEditorsPick(editors.data)
-      } catch (error) {
-        console.error('Error fetching workers:', error)
+      } catch (requestError) {
+        setError(requestError.response?.data?.error || 'Unable to load the ORCA Store.')
       }
     }
     fetchData()
   }, [])
 
-  const handleDeploy = async (id) => {
-    try {
-      // For demo, we'll use a dummy token
-      const token = 'dummy_token'
-      const response = await axios.post('/api/deployments/initiate', 
-        { worker_id: id, tool: 'slack' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      alert(`✅ Worker ${id} deployed successfully! Check Console.`)
-      console.log('Deployment response:', response.data)
-    } catch (error) {
-      console.error('Deployment error:', error)
-      alert('❌ Deployment failed. Check console for details.')
-    }
-  }
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      const trimmed = query.trim()
+      if (!trimmed) {
+        setSearchResults(null)
+        return
+      }
+      try {
+        const response = await api.get('/api/store/search', { params: { q: trimmed } })
+        setSearchResults(response.data)
+      } catch (requestError) {
+        setError(requestError.response?.data?.error || 'Search failed.')
+      }
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const handleDeploy = (id) => navigate(`/deploy/${id}`)
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <main className="max-w-7xl mx-auto px-4 py-6">
+      <section className="rounded-3xl bg-orca-deep-blue text-white p-7 mb-7">
+        <p className="text-sm font-semibold text-white/75">ORCA STORE</p>
+        <h1 className="text-3xl md:text-5xl font-extrabold mt-2 max-w-4xl">Hire digital employees that work 24/7/365 in the tools your business already uses.</h1>
+        <p className="mt-3 text-white/80 max-w-3xl">Start with a single digital employee. Grow into coordinated teams, departments, and a complete digital workforce.</p>
+      </section>
+
+      {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 p-3">{error}</div>}
+
       <div className="mb-6">
-        <input 
-          type="text" 
-          placeholder="Search for digital employees..." 
+        <input
+          type="search"
+          placeholder="Search digital employees..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
           style={{
             width: '100%',
-            maxWidth: '28rem',
-            padding: '0.5rem 1rem',
+            maxWidth: '34rem',
+            padding: '0.65rem 1rem',
             borderRadius: '9999px',
             border: '1px solid var(--border-color)',
             backgroundColor: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
-            outlineColor: 'var(--accent)'
           }}
         />
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-4 mb-4">
-        {['For You', 'Top Deployed', 'Trending', "Editors' Choice", 'New Employees'].map(cat => (
-          <span 
-            key={cat} 
-            style={{
-              padding: '0.375rem 1rem',
-              backgroundColor: 'var(--bg-secondary)',
-              borderRadius: '9999px',
-              border: '1px solid var(--border-color)',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              whiteSpace: 'nowrap',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.target.style.borderColor = 'var(--accent)'}
-            onMouseLeave={(e) => e.target.style.borderColor = 'var(--border-color)'}
-          >
-            {cat}
-          </span>
-        ))}
-      </div>
-
-      <Section title="Top Deployed" workers={topWorkers} onDeploy={handleDeploy} />
-      <Section title="Trending" workers={trending} onDeploy={handleDeploy} />
-      <Section title="Editors' Choice" workers={editorsPick} onDeploy={handleDeploy} />
-    </div>
+      {searchResults ? (
+        <Section title={`Search results (${searchResults.length})`} workers={searchResults} onDeploy={handleDeploy} />
+      ) : (
+        <>
+          <div className="flex gap-3 overflow-x-auto pb-4 mb-4">
+            {['Single digital employees', '24/7/365', 'Workspace agnostic', 'Human governed', 'ORCA Protect'].map((category) => (
+              <span key={category} className="px-4 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>{category}</span>
+            ))}
+          </div>
+          <Section title="Top Deployed" workers={topWorkers} onDeploy={handleDeploy} />
+          <Section title="Trending" workers={trending} onDeploy={handleDeploy} />
+          <Section title="Editors' Choice" workers={editorsPick} onDeploy={handleDeploy} />
+        </>
+      )}
+    </main>
   )
 }
 
 function Section({ title, workers, onDeploy }) {
   return (
-    <div className="mb-8">
+    <section className="mb-8">
       <div className="flex justify-between items-center mb-3">
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{title}</h2>
-        <a href="#" style={{ color: 'var(--accent)', fontSize: '0.875rem', fontWeight: '600', transition: 'opacity 0.2s ease' }} onMouseEnter={(e) => e.target.style.opacity = '0.8'} onMouseLeave={(e) => e.target.style.opacity = '1'}>View all &gt;</a>
+        <h2 className="text-xl font-bold">{title}</h2>
       </div>
       <div className="flex gap-4 overflow-x-auto pb-2">
-        {workers.map(w => (
-          <WorkerCard key={w.id} worker={w} onDeploy={onDeploy} />
-        ))}
+        {workers.map((worker) => <WorkerCard key={worker.id} worker={worker} onDeploy={onDeploy} />)}
+        {workers.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>No digital employees matched this search.</p>}
       </div>
-    </div>
+    </section>
   )
 }
