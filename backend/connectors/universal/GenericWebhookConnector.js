@@ -9,11 +9,7 @@ function sign(secret, timestamp, body) {
 
 class GenericWebhookConnector extends ConnectorAdapter {
   constructor() {
-    super({
-      key: 'generic-webhook',
-      name: 'Signed Webhook',
-      capabilities: ['webhook.deliver'],
-    });
+    super({ key: 'generic-webhook', name: 'Signed Webhook', capabilities: ['webhook.deliver'] });
   }
 
   async deliver({ connection, secrets, eventType, payload }) {
@@ -52,7 +48,9 @@ class GenericWebhookConnector extends ConnectorAdapter {
       });
       if (connection.configuration?.require_challenge_echo !== false) {
         const returned = response.data?.challenge;
-        if (returned !== challenge) throw new Error('Webhook did not return the ORCA verification challenge.');
+        if (returned !== challenge) {
+          throw new Error('Webhook did not return the ORCA verification challenge.');
+        }
       }
       return { ok: true, provider_response_status: response.status };
     } catch (error) {
@@ -64,7 +62,15 @@ class GenericWebhookConnector extends ConnectorAdapter {
     return [];
   }
 
-  async installDigitalEmployee({ connection, secrets, worker, deployment, grants, selectedResourceIds }) {
+  async installDigitalEmployee({
+    connection,
+    secrets,
+    worker,
+    deployment,
+    grants,
+    selectedResourceIds,
+    telemetryToken,
+  }) {
     const response = await this.deliver({
       connection,
       secrets,
@@ -77,7 +83,10 @@ class GenericWebhookConnector extends ConnectorAdapter {
           constraints: grant.constraints || {},
         })),
         selected_resource_ids: selectedResourceIds,
-        telemetry_url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}`,
+        telemetry: {
+          url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+          bearer_token: telemetryToken,
+        },
       },
     });
     const externalInstallationId = response.data?.installation_id || response.data?.id;
@@ -96,17 +105,9 @@ class GenericWebhookConnector extends ConnectorAdapter {
     });
   }
 
-  async pauseDigitalEmployee(args) {
-    return this.lifecycle('pause', args);
-  }
-
-  async resumeDigitalEmployee(args) {
-    return this.lifecycle('resume', args);
-  }
-
-  async uninstallDigitalEmployee(args) {
-    return this.lifecycle('uninstall', args);
-  }
+  async pauseDigitalEmployee(args) { return this.lifecycle('pause', args); }
+  async resumeDigitalEmployee(args) { return this.lifecycle('resume', args); }
+  async uninstallDigitalEmployee(args) { return this.lifecycle('uninstall', args); }
 
   async lifecycle(action, { connection, secrets, deploymentConnection }) {
     return this.deliver({
