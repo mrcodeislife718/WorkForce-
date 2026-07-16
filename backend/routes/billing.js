@@ -3,6 +3,7 @@ const auth = require('../middleware/auth');
 const { Worker, Subscription } = require('../models');
 const {
   stripeClient,
+  stripePriceId,
   hasEntitlement,
   createCheckoutSession,
   handleStripeEvent,
@@ -17,11 +18,7 @@ async function webhook(req, res) {
     }
     const signature = req.get('stripe-signature');
     if (!signature) return res.status(400).json({ error: 'Stripe signature is required.' });
-    const event = stripeClient().webhooks.constructEvent(
-      req.body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET,
-    );
+    const event = stripeClient().webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
     await handleStripeEvent(event);
     return res.json({ received: true });
   } catch (error) {
@@ -31,8 +28,7 @@ async function webhook(req, res) {
 
 router.post('/checkout-session', auth, async (req, res) => {
   try {
-    const checkout = await createCheckoutSession(req.user.id, req.body.worker_id);
-    return res.status(201).json(checkout);
+    return res.status(201).json(await createCheckoutSession(req.user.id, req.body.worker_id));
   } catch (error) {
     const status = error.code === 'STRIPE_NOT_CONFIGURED' ? 503 : 409;
     return res.status(status).json({ error: error.message || 'Unable to create checkout session.' });
@@ -48,7 +44,7 @@ router.get('/worker/:workerId/status', auth, async (req, res) => {
       worker_id: worker.id,
       price_model: worker.price_model,
       base_price: worker.base_price,
-      stripe_price_configured: Boolean(worker.stripe_price_id),
+      stripe_price_configured: Boolean(stripePriceId(worker)),
       entitled: entitlement.entitled,
       reason: entitlement.reason,
       subscription: entitlement.subscription || null,
