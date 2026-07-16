@@ -1,12 +1,14 @@
 require('dotenv').config();
 const sequelize = require('../config/database');
 const migrateLegacyUniversalSchema = require('../migrations/legacyUniversalMigration');
+const migrateCompleteFlowSchema = require('../migrations/completeFlowMigration');
 
 async function run() {
   await sequelize.authenticate();
   await migrateLegacyUniversalSchema();
+  await migrateCompleteFlowSchema();
   await sequelize.sync();
-  console.log('ORCA universal schema migration completed without deleting existing data.');
+  console.log('ORCA complete production-flow schema migration completed without deleting existing data.');
   await sequelize.close();
 }
 
