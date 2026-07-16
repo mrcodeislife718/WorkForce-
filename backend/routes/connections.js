@@ -20,13 +20,28 @@ const {
 const router = express.Router();
 
 function validateUniversalConfiguration(definition, configuration, secrets) {
+  const capabilities = Array.isArray(configuration?.capabilities)
+    ? configuration.capabilities.map((value) => typeof value === 'string' ? value.trim() : value?.key).filter(Boolean)
+    : [];
+  if (capabilities.length === 0) {
+    throw new Error('Declare at least one real capability provided by this connection.');
+  }
+  if (!Array.isArray(configuration?.allowed_hosts) || configuration.allowed_hosts.length === 0) {
+    throw new Error('At least one allowed host is required.');
+  }
+
   if (definition.adapter_key === 'generic-rest') {
     if (!configuration?.base_url) throw new Error('base_url is required.');
-    if (!configuration?.operations?.health) throw new Error('A real health operation is required.');
-    if (!configuration?.operations?.install) throw new Error('A real install operation is required.');
-    if (!configuration?.operations?.pause) throw new Error('A real pause operation is required.');
-    if (!configuration?.operations?.resume) throw new Error('A real resume operation is required.');
-    if (!configuration?.operations?.uninstall) throw new Error('A real uninstall operation is required.');
+    for (const lifecycleOperation of ['health', 'install', 'pause', 'resume', 'update', 'uninstall']) {
+      if (!configuration?.operations?.[lifecycleOperation]) {
+        throw new Error(`A real ${lifecycleOperation} operation is required.`);
+      }
+    }
+    for (const capability of capabilities) {
+      if (!configuration?.operations?.[capability]) {
+        throw new Error(`A real REST operation is required for capability ${capability}.`);
+      }
+    }
     const authType = configuration.auth?.type;
     if (authType === 'bearer_token' && !secrets?.bearer_token) throw new Error('bearer_token is required.');
     if (authType === 'api_key' && !secrets?.api_key) throw new Error('api_key is required.');
@@ -103,7 +118,7 @@ router.post('/', auth, async (req, res) => {
     });
     return res.status(201).json({ connection: created, resources });
   } catch (error) {
-    if (connection && connection.status === 'pending') {
+    if (connection && ['pending', 'active'].includes(connection.status)) {
       await connection.update({ status: 'error', last_error: error.message }).catch(() => {});
     }
     return res.status(400).json({ error: error.message || 'Unable to connect workspace.' });
@@ -165,7 +180,6 @@ router.delete('/:id', auth, async (req, res) => {
         required: true,
       }],
     });
-
     if (activeBinding) {
       return res.status(409).json({
         error: 'Uninstall the digital employees using this workspace before disconnecting it.',
