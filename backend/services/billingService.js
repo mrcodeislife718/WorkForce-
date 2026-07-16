@@ -8,6 +8,14 @@ const {
   Subscription,
 } = require('../models');
 
+const PRICE_ENV_BY_WORKER = {
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa': 'STRIPE_PRICE_CUSTOMER_SUPPORT',
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb': 'STRIPE_PRICE_FOUNDER_ASSISTANT',
+  'cccccccc-cccc-cccc-cccc-cccccccccccc': 'STRIPE_PRICE_COMMERCE_SUPPORT',
+  'dddddddd-dddd-dddd-dddd-dddddddddddd': 'STRIPE_PRICE_SALES_FOLLOW_UP',
+  'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee': 'STRIPE_PRICE_CONTENT_PRODUCTION',
+};
+
 function stripeClient() {
   if (!process.env.STRIPE_SECRET_KEY) {
     const error = new Error('Stripe billing is not configured.');
@@ -15,6 +23,10 @@ function stripeClient() {
     throw error;
   }
   return new Stripe(process.env.STRIPE_SECRET_KEY);
+}
+
+function stripePriceId(worker) {
+  return worker.stripe_price_id || process.env[PRICE_ENV_BY_WORKER[worker.id]] || null;
 }
 
 async function activeSubscription(userId, workerId) {
@@ -44,7 +56,6 @@ async function assertPurchaseEligibility(userId, workerId) {
     order: [['completed_at', 'DESC']],
   });
   if (!interview) throw new Error('Complete the interview before purchasing this digital employee.');
-
   const sample = await SampleAssignment.findOne({
     where: { user_id: userId, worker_id: workerId, status: 'reviewed' },
     order: [['reviewed_at', 'DESC']],
@@ -59,10 +70,9 @@ async function createCheckoutSession(userId, workerId) {
   if (worker.price_model === 'free') {
     return { free: true, url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/deploy/${worker.id}` };
   }
-  if (worker.price_model !== 'subscription') {
-    throw new Error('This purchase model is not configured for checkout yet.');
-  }
-  if (!worker.stripe_price_id) throw new Error('This digital employee does not have a Stripe price configured.');
+  if (worker.price_model !== 'subscription') throw new Error('This purchase model is not configured for checkout yet.');
+  const priceId = stripePriceId(worker);
+  if (!priceId) throw new Error('This digital employee does not have a real Stripe price configured.');
   await assertPurchaseEligibility(userId, workerId);
 
   const existing = await activeSubscription(userId, workerId);
@@ -90,14 +100,12 @@ async function createCheckoutSession(userId, workerId) {
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
-    line_items: [{ price: worker.stripe_price_id, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${frontendUrl}/purchase/success?worker_id=${worker.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/worker/${worker.id}`,
     allow_promotion_codes: true,
     metadata: { orca_user_id: user.id, orca_worker_id: worker.id },
-    subscription_data: {
-      metadata: { orca_user_id: user.id, orca_worker_id: worker.id },
-    },
+    subscription_data: { metadata: { orca_user_id: user.id, orca_worker_id: worker.id } },
   });
 
   await Subscription.create({
@@ -105,7 +113,7 @@ async function createCheckoutSession(userId, workerId) {
     worker_id: worker.id,
     provider: 'stripe',
     provider_customer_id: customerId,
-    provider_price_id: worker.stripe_price_id,
+    provider_price_id: priceId,
     status: 'pending',
     metadata: { checkout_session_id: session.id },
   });
@@ -113,20 +121,15 @@ async function createCheckoutSession(userId, workerId) {
 }
 
 function subscriptionPeriodEnd(subscription) {
-  return subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000)
-    : null;
+  return subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null;
 }
 
 async function persistStripeSubscription(stripeSubscription, fallback = {}) {
-  const existing = await Subscription.findOne({
-    where: { provider_subscription_id: stripeSubscription.id },
-  });
+  const existing = await Subscription.findOne({ where: { provider_subscription_id: stripeSubscription.id } });
   const userId = stripeSubscription.metadata?.orca_user_id || existing?.user_id || fallback.user_id;
   const workerId = stripeSubscription.metadata?.orca_worker_id || existing?.worker_id || fallback.worker_id;
   if (!userId || !workerId) throw new Error('Stripe subscription is missing ORCA ownership metadata.');
   const priceId = stripeSubscription.items?.data?.[0]?.price?.id || existing?.provider_price_id || fallback.provider_price_id;
-
   const values = {
     user_id: userId,
     worker_id: workerId,
@@ -172,6 +175,7 @@ async function handleStripeEvent(event) {
 
 module.exports = {
   stripeClient,
+  stripePriceId,
   activeSubscription,
   hasEntitlement,
   assertPurchaseEligibility,
