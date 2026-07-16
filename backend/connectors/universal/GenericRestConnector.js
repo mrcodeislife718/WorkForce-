@@ -14,9 +14,7 @@ function buildAuthHeaders(configuration, secrets) {
       if (!secrets.api_key) throw new Error('API key is missing.');
       return { [auth.header_name || 'X-API-Key']: secrets.api_key };
     case 'basic_auth': {
-      if (!secrets.basic_username || !secrets.basic_password) {
-        throw new Error('Basic-auth credentials are missing.');
-      }
+      if (!secrets.basic_username || !secrets.basic_password) throw new Error('Basic-auth credentials are missing.');
       const encoded = Buffer.from(`${secrets.basic_username}:${secrets.basic_password}`).toString('base64');
       return { Authorization: `Basic ${encoded}` };
     }
@@ -30,9 +28,7 @@ function buildAuthHeaders(configuration, secrets) {
 
 function interpolatePath(path, params = {}) {
   return String(path).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => {
-    if (params[key] === undefined || params[key] === null) {
-      throw new Error(`Missing path parameter: ${key}`);
-    }
+    if (params[key] === undefined || params[key] === null) throw new Error(`Missing path parameter: ${key}`);
     return encodeURIComponent(String(params[key]));
   });
 }
@@ -45,10 +41,8 @@ class GenericRestConnector extends ConnectorAdapter {
   async request({ configuration, secrets, operation, input = {} }) {
     if (!configuration?.base_url) throw new Error('REST connector base_url is required.');
     if (!operation?.path) throw new Error('REST connector operation path is required.');
-
     const method = String(operation.method || 'GET').toUpperCase();
     if (!ALLOWED_METHODS.has(method)) throw new Error(`HTTP method ${method} is not allowed.`);
-
     const baseUrl = configuration.base_url.endsWith('/') ? configuration.base_url : `${configuration.base_url}/`;
     const relativePath = interpolatePath(operation.path.replace(/^\//, ''), input.path_params || {});
     const url = new URL(relativePath, baseUrl).toString();
@@ -76,6 +70,10 @@ class GenericRestConnector extends ConnectorAdapter {
       ok: true,
       status: response.status,
       data: response.data,
+      records_read: Number(response.data?.records_read || 0),
+      records_created: Number(response.data?.records_created || 0),
+      records_updated: Number(response.data?.records_updated || 0),
+      records_deleted: Number(response.data?.records_deleted || 0),
       headers: {
         'content-type': response.headers['content-type'] || null,
         'x-request-id': response.headers['x-request-id'] || null,
@@ -109,15 +107,7 @@ class GenericRestConnector extends ConnectorAdapter {
     }));
   }
 
-  async installDigitalEmployee({
-    connection,
-    secrets,
-    worker,
-    deployment,
-    grants,
-    selectedResourceIds,
-    telemetryToken,
-  }) {
+  async installDigitalEmployee({ connection, secrets, worker, deployment, grants, selectedResourceIds, telemetryToken }) {
     const operation = connection.configuration?.operations?.install;
     if (!operation) throw new Error('A real install operation must be configured for this workspace.');
     const response = await this.request({
@@ -128,13 +118,11 @@ class GenericRestConnector extends ConnectorAdapter {
         body: {
           orca_deployment_id: deployment.id,
           digital_employee: { id: worker.id, name: worker.name, version: worker.version },
-          approved_capabilities: grants.map((grant) => ({
-            key: grant.capability_key,
-            constraints: grant.constraints || {},
-          })),
+          approved_capabilities: grants.map((grant) => ({ key: grant.capability_key, constraints: grant.constraints || {} })),
           selected_resource_ids: selectedResourceIds,
-          telemetry: {
-            url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+          orca_control_plane: {
+            telemetry_url: `${process.env.PUBLIC_API_URL || ''}/api/telemetry/deployments/${deployment.id}/events`,
+            task_intake_url: `${process.env.PUBLIC_API_URL || ''}/api/runtime/deployments/${deployment.id}/tasks`,
             bearer_token: telemetryToken,
           },
         },
@@ -153,9 +141,10 @@ class GenericRestConnector extends ConnectorAdapter {
 
   async pauseDigitalEmployee(args) { return this.lifecycleRequest('pause', args); }
   async resumeDigitalEmployee(args) { return this.lifecycleRequest('resume', args); }
+  async updateDigitalEmployee(args) { return this.lifecycleRequest('update', args); }
   async uninstallDigitalEmployee(args) { return this.lifecycleRequest('uninstall', args); }
 
-  async lifecycleRequest(action, { connection, secrets, deploymentConnection }) {
+  async lifecycleRequest(action, { connection, secrets, deploymentConnection, worker }) {
     const operation = connection.configuration?.operations?.[action];
     if (!operation) throw new Error(`A real ${action} operation must be configured.`);
     return this.request({
@@ -166,6 +155,7 @@ class GenericRestConnector extends ConnectorAdapter {
         body: {
           external_installation_id: deploymentConnection.external_installation_id,
           orca_deployment_id: deploymentConnection.deployment_id,
+          digital_employee_version: worker?.version || undefined,
         },
       },
     });
