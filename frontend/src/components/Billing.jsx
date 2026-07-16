@@ -1,43 +1,70 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import api from '../api/client'
 
 export default function Billing() {
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-orca-black dark:text-white mb-4">ORCA Billing</h1>
-        <p className="text-lg text-orca-steel dark:text-gray-400 mb-2">Manage invoices and billing settings</p>
-        <p className="text-gray-600 dark:text-gray-500">Coming soon</p>
-      </div>
-      
-      <div className="grid md:grid-cols-2 gap-6 mb-12">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="text-3xl mb-3">💳</div>
-          <h3 className="font-bold text-orca-black dark:text-white mb-2">Payment Methods</h3>
-          <p className="text-orca-steel dark:text-gray-400">Securely manage your payment methods and billing information.</p>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="text-3xl mb-3">📄</div>
-          <h3 className="font-bold text-orca-black dark:text-white mb-2">Invoices</h3>
-          <p className="text-orca-steel dark:text-gray-400">View and download all your billing invoices and receipts.</p>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="text-3xl mb-3">📈</div>
-          <h3 className="font-bold text-orca-black dark:text-white mb-2">Usage & Pricing</h3>
-          <p className="text-orca-steel dark:text-gray-400">Track your digital employee usage and see billing details.</p>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="text-3xl mb-3">⚙️</div>
-          <h3 className="font-bold text-orca-black dark:text-white mb-2">Billing Settings</h3>
-          <p className="text-orca-steel dark:text-gray-400">Configure billing cycles, alerts, and preferences.</p>
-        </div>
-      </div>
+  const [subscriptions, setSubscriptions] = useState([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-8 text-center">
-        <p className="text-orca-steel dark:text-gray-400 mb-4">Billing management is currently in development. Check back soon for invoicing and payment features.</p>
+  useEffect(() => {
+    api.get('/api/billing/subscriptions')
+      .then((response) => setSubscriptions(response.data.subscriptions || []))
+      .catch((requestError) => setError(requestError.response?.data?.error || 'Unable to load subscriptions.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <main className="max-w-5xl mx-auto px-4 py-10">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">ORCA Billing</h1>
+        <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Real Stripe subscription status for your digital employees.</p>
       </div>
-    </div>
+      {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 p-3 text-red-700 dark:text-red-300">{error}</div>}
+
+      {loading ? (
+        <p>Loading subscriptions…</p>
+      ) : subscriptions.length === 0 ? (
+        <section className="rounded-2xl border p-8 text-center" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+          <h2 className="text-xl font-bold">No subscriptions yet</h2>
+          <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Interview a digital employee, review its sample work, then complete checkout from its hiring flow.</p>
+        </section>
+      ) : (
+        <section className="space-y-4">
+          {subscriptions.map((subscription) => (
+            <article key={subscription.id} className="rounded-2xl border p-5" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+              <div className="flex flex-wrap justify-between gap-4">
+                <div className="flex gap-3">
+                  <span className="text-4xl">{subscription.Worker?.icon_url || '🤖'}</span>
+                  <div>
+                    <h2 className="text-lg font-bold">{subscription.Worker?.name || 'Digital employee'}</h2>
+                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Provider: {subscription.provider}</p>
+                  </div>
+                </div>
+                <span className={`h-fit rounded-full px-3 py-1 text-sm font-bold ${['active', 'trialing'].includes(subscription.status) ? 'bg-green-100 text-green-800' : ['past_due', 'unpaid'].includes(subscription.status) ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                  {subscription.status}
+                </span>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-3 mt-5 text-sm">
+                <div>
+                  <p style={{ color: 'var(--text-secondary)' }}>Price</p>
+                  <p className="font-bold">${subscription.Worker?.base_price || '0.00'}/mo</p>
+                </div>
+                <div>
+                  <p style={{ color: 'var(--text-secondary)' }}>Current period ends</p>
+                  <p className="font-bold">{subscription.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'Not reported'}</p>
+                </div>
+                <div>
+                  <p style={{ color: 'var(--text-secondary)' }}>Cancellation</p>
+                  <p className="font-bold">{subscription.cancel_at_period_end ? 'Ends after current period' : 'Renews automatically'}</p>
+                </div>
+              </div>
+              {subscription.status === 'pending' && (
+                <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">ORCA is waiting for Stripe’s signed webhook confirmation. Deployment remains blocked.</p>
+              )}
+            </article>
+          ))}
+        </section>
+      )}
+    </main>
   )
 }
