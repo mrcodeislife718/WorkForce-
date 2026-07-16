@@ -1,10 +1,13 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const auth = require('../middleware/auth');
 const {
   ConnectorDefinition,
   WorkspaceConnection,
   ConnectionSecret,
   WorkspaceResource,
+  DeploymentConnection,
+  Deployment,
 } = require('../models');
 const registry = require('../connectors/registerBuiltins')();
 const {
@@ -150,9 +153,28 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     const connection = await getOwnedConnection(req.user.id, req.params.id);
     if (!connection) return res.status(404).json({ error: 'Workspace connection was not found.' });
+
+    const activeBinding = await DeploymentConnection.findOne({
+      where: {
+        workspace_connection_id: connection.id,
+        status: { [Op.in]: ['pending', 'active', 'degraded', 'paused'] },
+      },
+      include: [{
+        model: Deployment,
+        where: { user_id: req.user.id, status: { [Op.ne]: 'uninstalled' } },
+        required: true,
+      }],
+    });
+
+    if (activeBinding) {
+      return res.status(409).json({
+        error: 'Uninstall the digital employees using this workspace before disconnecting it.',
+      });
+    }
+
     await ConnectionSecret.destroy({ where: { workspace_connection_id: connection.id } });
     await WorkspaceResource.destroy({ where: { workspace_connection_id: connection.id } });
-    await connection.update({ status: 'disconnected', last_error: null });
+    await connection.update({ status: 'disconnected', last_error: null, configuration: {} });
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Unable to disconnect workspace.' });
