@@ -5,7 +5,6 @@ const migrateLegacyUniversalSchema = require('../migrations/legacyUniversalMigra
 async function run() {
   await sequelize.authenticate();
   await migrateLegacyUniversalSchema();
-  await sequelize.close();
   require('../seed');
 }
 
