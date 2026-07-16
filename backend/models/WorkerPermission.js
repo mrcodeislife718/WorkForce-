@@ -9,13 +9,15 @@ const WorkerPermission = sequelize.define('WorkerPermission', {
   description: { type: DataTypes.TEXT, allowNull: false },
   resource_type: { type: DataTypes.STRING(100), allowNull: false },
   action: {
-    type: DataTypes.ENUM('read', 'create', 'update', 'delete', 'execute', 'subscribe'),
+    type: DataTypes.STRING(40),
     allowNull: false,
+    validate: { isIn: [['read', 'create', 'update', 'delete', 'execute', 'subscribe']] },
   },
   risk_level: {
-    type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
+    type: DataTypes.STRING(20),
     defaultValue: 'low',
     allowNull: false,
+    validate: { isIn: [['low', 'medium', 'high', 'critical']] },
   },
   is_required: { type: DataTypes.BOOLEAN, defaultValue: true, allowNull: false },
   requires_human_approval: { type: DataTypes.BOOLEAN, defaultValue: false, allowNull: false },
