@@ -59,10 +59,7 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
   const validationErrors = validateCapabilityAssignments(
     worker.WorkerPermissions,
     capabilityAssignments,
-    connections.map((connection) => ({
-      connectionId: connection.id,
-      definition: connection.ConnectorDefinition,
-    })),
+    connections,
   );
   if (validationErrors.length > 0) {
     const error = new Error('Digital employee capability validation failed.');
@@ -150,6 +147,7 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
         secrets,
         worker,
         deployment: created.deployment,
+        deploymentConnection,
         grants,
         selectedResourceIds: deploymentConnection.selected_resource_ids,
         telemetryToken,
