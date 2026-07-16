@@ -1,108 +1,238 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import WorkerCard from './WorkerCard.jsx'
 
+const categories = [
+  { label: 'For You', value: 'all' },
+  { label: 'Customer Support', value: 'support' },
+  { label: 'Sales and Growth', value: 'sales' },
+  { label: 'Administration', value: 'admin' },
+  { label: 'Content and Creative', value: 'design' },
+  { label: 'New Employees', value: 'new' },
+]
+
+async function getCollection(primaryPath, fallbackPath) {
+  try {
+    const response = await axios.get(primaryPath)
+    return response.data
+  } catch (error) {
+    if (!fallbackPath) throw error
+    const response = await axios.get(fallbackPath)
+    return response.data
+  }
+}
+
 export default function Home() {
-  const [topWorkers, setTopWorkers] = useState([])
-  const [trending, setTrending] = useState([])
-  const [editorsPick, setEditorsPick] = useState([])
+  const [featured, setFeatured] = useState([])
+  const [recommended, setRecommended] = useState([])
+  const [popularFunctions, setPopularFunctions] = useState([])
+  const [newEmployees, setNewEmployees] = useState([])
+  const [searchResults, setSearchResults] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const fetchData = async () => {
+    let mounted = true
+
+    const fetchCatalog = async () => {
       try {
-        const [top, trend, editors] = await Promise.all([
-          axios.get('/api/store/top-deployed'),
-          axios.get('/api/store/trending'),
-          axios.get('/api/store/editors-choice'),
+        const [featuredData, recommendedData, popularData, newData] = await Promise.all([
+          getCollection('/api/store/featured', '/api/store/top-deployed'),
+          getCollection('/api/store/recommended', '/api/store/editors-choice'),
+          getCollection('/api/store/popular-functions', '/api/store/trending'),
+          getCollection('/api/store/new-employees', '/api/store/trending'),
         ])
-        setTopWorkers(top.data)
-        setTrending(trend.data)
-        setEditorsPick(editors.data)
-      } catch (error) {
-        console.error('Error fetching workers:', error)
+
+        if (!mounted) return
+        setFeatured(featuredData)
+        setRecommended(recommendedData)
+        setPopularFunctions(popularData)
+        setNewEmployees(newData)
+      } catch (catalogError) {
+        console.error('Error fetching digital employees:', catalogError)
+        if (mounted) setError('The ORCA catalog could not be loaded. Confirm that the backend is running on port 5000.')
+      } finally {
+        if (mounted) setLoading(false)
       }
     }
-    fetchData()
+
+    fetchCatalog()
+    return () => { mounted = false }
   }, [])
 
-  const handleDeploy = async (id) => {
-    try {
-      // For demo, we'll use a dummy token
-      const token = 'dummy_token'
-      const response = await axios.post('/api/deployments/initiate', 
-        { worker_id: id, tool: 'slack' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      alert(`✅ Worker ${id} deployed successfully! Check Console.`)
-      console.log('Deployment response:', response.data)
-    } catch (error) {
-      console.error('Deployment error:', error)
-      alert('❌ Deployment failed. Check console for details.')
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (!query) {
+      setSearchResults([])
+      return undefined
     }
-  }
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await axios.get('/api/store/search', {
+          params: { q: query, category: activeCategory === 'all' || activeCategory === 'new' ? undefined : activeCategory },
+          signal: controller.signal,
+        })
+        setSearchResults(response.data)
+      } catch (searchError) {
+        if (searchError.name !== 'CanceledError') {
+          console.error('Digital employee search failed:', searchError)
+        }
+      }
+    }, 250)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [searchQuery, activeCategory])
+
+  const filteredSections = useMemo(() => {
+    const filter = (items) => {
+      if (activeCategory === 'all') return items
+      if (activeCategory === 'new') return items
+      return items.filter((item) => item.category === activeCategory)
+    }
+
+    return {
+      featured: filter(featured),
+      recommended: filter(recommended),
+      popularFunctions: filter(popularFunctions),
+      newEmployees: filter(newEmployees),
+    }
+  }, [activeCategory, featured, recommended, popularFunctions, newEmployees])
+
+  const isSearching = searchQuery.trim().length > 0
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <input 
-          type="text" 
-          placeholder="Search for digital employees..." 
-          style={{
-            width: '100%',
-            maxWidth: '28rem',
-            padding: '0.5rem 1rem',
-            borderRadius: '9999px',
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            outlineColor: 'var(--accent)'
-          }}
-        />
-      </div>
+    <main className="orca-store-shell">
+      <section className="orca-store-hero" aria-labelledby="orca-store-heading">
+        <div>
+          <p className="orca-eyebrow">Digital labor for every stage of business</p>
+          <h1 id="orca-store-heading">Build Your Digital Labor Workforce</h1>
+          <p className="orca-store-hero__copy">
+            Discover, interview, test, hire, and deploy skilled digital employees for solopreneurs,
+            small businesses, and enterprises.
+          </p>
+        </div>
+        <div className="orca-store-hero__trust">
+          <strong>Evaluate before deployment.</strong>
+          <span>Interview and test every digital employee before you pay and deploy.</span>
+        </div>
+      </section>
 
-      <div className="flex gap-3 overflow-x-auto pb-4 mb-4">
-        {['For You', 'Top Deployed', 'Trending', "Editors' Choice", 'New Employees'].map(cat => (
-          <span 
-            key={cat} 
-            style={{
-              padding: '0.375rem 1rem',
-              backgroundColor: 'var(--bg-secondary)',
-              borderRadius: '9999px',
-              border: '1px solid var(--border-color)',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              whiteSpace: 'nowrap',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.target.style.borderColor = 'var(--accent)'}
-            onMouseLeave={(e) => e.target.style.borderColor = 'var(--border-color)'}
-          >
-            {cat}
-          </span>
-        ))}
-      </div>
+      <section className="orca-search-panel" aria-label="Search the ORCA digital employee catalog">
+        <label className="orca-search-box">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <span className="sr-only">Search for digital employees</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search for digital employees, roles, or business functions..."
+          />
+        </label>
 
-      <Section title="Top Deployed" workers={topWorkers} onDeploy={handleDeploy} />
-      <Section title="Trending" workers={trending} onDeploy={handleDeploy} />
-      <Section title="Editors' Choice" workers={editorsPick} onDeploy={handleDeploy} />
-    </div>
+        <div className="orca-category-tabs" role="tablist" aria-label="Digital employee categories">
+          {categories.map((category) => (
+            <button
+              type="button"
+              key={category.value}
+              role="tab"
+              aria-selected={activeCategory === category.value}
+              className={activeCategory === category.value ? 'is-active' : ''}
+              onClick={() => setActiveCategory(category.value)}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {error && <div className="orca-alert" role="alert">{error}</div>}
+      {loading && <div className="orca-loading" aria-live="polite">Loading ORCA digital employees…</div>}
+
+      {!loading && (
+        <div id="catalog" className="orca-catalog">
+          {isSearching ? (
+            <Section
+              title={`Search results for “${searchQuery.trim()}”`}
+              description="Results are filtered by professional role, capability, publisher, and selected business function."
+              digitalEmployees={searchResults}
+            />
+          ) : (
+            <>
+              <Section
+                title="Featured Digital Employees"
+                description="Launch candidates selected for clear business value, bounded scope, and evaluation readiness."
+                digitalEmployees={filteredSections.featured}
+              />
+              <Section
+                title="Recommended Roles"
+                description="Professional digital employees for the functions growing businesses need most."
+                digitalEmployees={filteredSections.recommended}
+              />
+              <Section
+                title="Popular Business Functions"
+                description="Browse digital labor by the work your business needs completed."
+                digitalEmployees={filteredSections.popularFunctions}
+              />
+              <Section
+                title="New Digital Employees"
+                description="Recently added digital employees whose public evidence will grow through verified evaluations and deployments."
+                digitalEmployees={filteredSections.newEmployees}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      <section className="orca-journey" aria-labelledby="orca-journey-heading">
+        <div>
+          <p className="orca-eyebrow">The ORCA hiring journey</p>
+          <h2 id="orca-journey-heading">Evaluate demonstrated capability before deployment</h2>
+        </div>
+        <ol>
+          {['Discover', 'Interview', 'Test', 'Review', 'Pay', 'Deploy', 'Manage'].map((step, index) => (
+            <li key={step}>
+              <span>{index + 1}</span>
+              <strong>{step}</strong>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </main>
   )
 }
 
-function Section({ title, workers, onDeploy }) {
+function Section({ title, description, digitalEmployees }) {
   return (
-    <div className="mb-8">
-      <div className="flex justify-between items-center mb-3">
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{title}</h2>
-        <a href="#" style={{ color: 'var(--accent)', fontSize: '0.875rem', fontWeight: '600', transition: 'opacity 0.2s ease' }} onMouseEnter={(e) => e.target.style.opacity = '0.8'} onMouseLeave={(e) => e.target.style.opacity = '1'}>View all &gt;</a>
+    <section className="orca-catalog-section">
+      <div className="orca-catalog-section__heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <a href="#catalog">View all <span aria-hidden="true">›</span></a>
       </div>
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {workers.map(w => (
-          <WorkerCard key={w.id} worker={w} onDeploy={onDeploy} />
-        ))}
-      </div>
-    </div>
+
+      {digitalEmployees.length > 0 ? (
+        <div className="digital-employee-grid">
+          {digitalEmployees.map((digitalEmployee) => (
+            <WorkerCard key={digitalEmployee.id} worker={digitalEmployee} />
+          ))}
+        </div>
+      ) : (
+        <div className="orca-empty-state">
+          No published digital employees match this category yet.
+        </div>
+      )}
+    </section>
   )
 }
