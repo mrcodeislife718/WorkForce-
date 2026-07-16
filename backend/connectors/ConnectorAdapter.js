@@ -28,6 +28,10 @@ class ConnectorAdapter {
     throw new Error(`${this.definition.key} does not implement resuming.`);
   }
 
+  async updateDigitalEmployee() {
+    throw new Error(`${this.definition.key} does not implement updates.`);
+  }
+
   async uninstallDigitalEmployee() {
     throw new Error(`${this.definition.key} does not implement uninstallation.`);
   }
