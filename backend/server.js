@@ -8,6 +8,8 @@ const auth = require('./middleware/auth');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const migrateLegacyUniversalSchema = require('./migrations/legacyUniversalMigration');
+const migrateCompleteFlowSchema = require('./migrations/completeFlowMigration');
+const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
@@ -19,6 +21,7 @@ const consoleRoutes = require('./routes/console');
 const runtimeRoutes = require('./routes/runtime');
 const approvalRoutes = require('./routes/approvals');
 const { router: billingRoutes, webhook: billingWebhook } = require('./routes/billing');
+const { router: storeCatalogRoutes } = require('./routes/storeCatalog');
 const { startRuntimeWorker, stopRuntimeWorker } = require('./runtime/JobRunner');
 
 const app = express();
@@ -142,6 +145,8 @@ app.get('/api/store/search', async (req, res) => {
     if (q) {
       where[Op.or] = [
         { name: { [Op.iLike]: `%${q}%` } },
+        { role_title: { [Op.iLike]: `%${q}%` } },
+        { department: { [Op.iLike]: `%${q}%` } },
         { description: { [Op.iLike]: `%${q}%` } },
       ];
     }
@@ -175,6 +180,7 @@ app.get('/api/workers/:id/reviews', async (req, res) => {
   }
 });
 
+app.use('/api/store', storeCatalogRoutes);
 app.use('/api/connectors', connectorRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/interviews', interviewRoutes);
@@ -193,7 +199,11 @@ app.use((error, _req, res, _next) => {
 
 async function prepareDatabase() {
   await sequelize.authenticate();
-  if (process.env.RUN_LEGACY_MIGRATIONS !== 'false') await migrateLegacyUniversalSchema();
+  if (process.env.RUN_LEGACY_MIGRATIONS !== 'false') {
+    await migrateLegacyUniversalSchema();
+    await migrateCompleteFlowSchema();
+    await migrateStoreCatalogSchema();
+  }
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
   if (syncMode === 'alter') await sequelize.sync({ alter: true });
   else if (syncMode === 'create') await sequelize.sync();
