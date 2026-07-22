@@ -43,9 +43,13 @@ async function migrateWorkers(queryInterface, transaction) {
 }
 
 async function createBundles(queryInterface, transaction) {
-  const existingBundles = await resolveTable(queryInterface, 'WorkforceBundles');
-  if (!existingBundles) {
-    await queryInterface.createTable('WorkforceBundles', {
+  const workersTable = await resolveTable(queryInterface, 'Workers');
+  if (!workersTable) return;
+
+  let bundlesTable = await resolveTable(queryInterface, 'WorkforceBundles');
+  if (!bundlesTable) {
+    bundlesTable = 'WorkforceBundles';
+    await queryInterface.createTable(bundlesTable, {
       id: { type: DataTypes.UUID, allowNull: false, primaryKey: true },
       slug: { type: DataTypes.STRING(160), allowNull: false, unique: true },
       name: { type: DataTypes.STRING(180), allowNull: false },
@@ -61,8 +65,8 @@ async function createBundles(queryInterface, transaction) {
       createdAt: { type: DataTypes.DATE, allowNull: false },
       updatedAt: { type: DataTypes.DATE, allowNull: false },
     }, { transaction });
-    await queryInterface.addIndex('WorkforceBundles', ['bundle_type'], { transaction });
-    await queryInterface.addIndex('WorkforceBundles', ['status'], { transaction });
+    await queryInterface.addIndex(bundlesTable, ['bundle_type'], { transaction });
+    await queryInterface.addIndex(bundlesTable, ['status'], { transaction });
   }
 
   const existingMembers = await resolveTable(queryInterface, 'WorkforceBundleMembers');
@@ -72,13 +76,13 @@ async function createBundles(queryInterface, transaction) {
       workforce_bundle_id: {
         type: DataTypes.UUID,
         allowNull: false,
-        references: { model: 'WorkforceBundles', key: 'id' },
+        references: { model: bundlesTable, key: 'id' },
         onDelete: 'CASCADE',
       },
       worker_id: {
         type: DataTypes.UUID,
         allowNull: false,
-        references: { model: 'Workers', key: 'id' },
+        references: { model: workersTable, key: 'id' },
         onDelete: 'CASCADE',
       },
       position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
