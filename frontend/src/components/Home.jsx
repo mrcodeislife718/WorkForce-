@@ -1,110 +1,167 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import api from '../api/client'
+import React, { useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { useStoreCatalog } from '../contexts/StoreCatalogContext.jsx'
+import OrcaLogo from './OrcaLogo.jsx'
 import WorkerCard from './WorkerCard.jsx'
+import WorkforceBundleCard from './WorkforceBundleCard.jsx'
+import IntegrationCard from './IntegrationCard.jsx'
+import CatalogCarousel from './CatalogCarousel.jsx'
+import OrcaFooter from './OrcaFooter.jsx'
+
+const VALID_VIEWS = new Set(['employees', 'teams', 'departments', 'integrations', 'business', 'enterprise', 'pricing'])
+
+function searchableEmployee(employee) {
+  return [
+    employee.name,
+    employee.role_title,
+    employee.department,
+    employee.career_level,
+    employee.description,
+    ...(Array.isArray(employee.skills) ? employee.skills : []),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function searchableBundle(bundle) {
+  return [
+    bundle.name,
+    bundle.description,
+    bundle.department,
+    ...(bundle.members || []).map(searchableEmployee),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
 
 export default function Home() {
-  const navigate = useNavigate()
-  const [topWorkers, setTopWorkers] = useState([])
-  const [trending, setTrending] = useState([])
-  const [editorsPick, setEditorsPick] = useState([])
+  const { view: routeView } = useParams()
+  const { catalog, loading, error, refresh } = useStoreCatalog()
   const [query, setQuery] = useState('')
-  const [searchResults, setSearchResults] = useState(null)
-  const [error, setError] = useState('')
+  const view = VALID_VIEWS.has(routeView) ? routeView : 'employees'
+  const normalizedQuery = query.trim().toLowerCase()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [top, trend, editors] = await Promise.all([
-          api.get('/api/store/top-deployed'),
-          api.get('/api/store/trending'),
-          api.get('/api/store/editors-choice'),
-        ])
-        setTopWorkers(top.data)
-        setTrending(trend.data)
-        setEditorsPick(editors.data)
-      } catch (requestError) {
-        setError(requestError.response?.data?.error || 'Unable to load the ORCA Store.')
-      }
-    }
-    fetchData()
-  }, [])
+  const employees = useMemo(() => {
+    const source = catalog?.employees || []
+    return normalizedQuery ? source.filter((item) => searchableEmployee(item).includes(normalizedQuery)) : source
+  }, [catalog, normalizedQuery])
 
-  useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      const trimmed = query.trim()
-      if (!trimmed) {
-        setSearchResults(null)
-        return
-      }
-      try {
-        const response = await api.get('/api/store/search', { params: { q: trimmed } })
-        setSearchResults(response.data)
-      } catch (requestError) {
-        setError(requestError.response?.data?.error || 'Search failed.')
-      }
-    }, 300)
-    return () => window.clearTimeout(timer)
-  }, [query])
+  const teams = useMemo(() => {
+    const source = catalog?.teams || []
+    return normalizedQuery ? source.filter((item) => searchableBundle(item).includes(normalizedQuery)) : source
+  }, [catalog, normalizedQuery])
 
-  const handleDeploy = (id) => navigate(`/deploy/${id}`)
+  const departments = useMemo(() => {
+    const source = catalog?.departments || []
+    return normalizedQuery ? source.filter((item) => searchableBundle(item).includes(normalizedQuery)) : source
+  }, [catalog, normalizedQuery])
+
+  const integrations = useMemo(() => {
+    const source = catalog?.integrations || []
+    return normalizedQuery
+      ? source.filter((item) => `${item.name} ${item.description} ${item.category}`.toLowerCase().includes(normalizedQuery))
+      : source
+  }, [catalog, normalizedQuery])
 
   return (
-    <main className="max-w-7xl mx-auto px-4 py-6">
-      <section className="rounded-3xl bg-orca-deep-blue text-white p-7 mb-7">
-        <p className="text-sm font-semibold text-white/75">ORCA STORE</p>
-        <h1 className="text-3xl md:text-5xl font-extrabold mt-2 max-w-4xl">Hire digital employees that work 24/7/365 in the tools your business already uses.</h1>
-        <p className="mt-3 text-white/80 max-w-3xl">Start with a single digital employee. Grow into coordinated teams, departments, and a complete digital workforce.</p>
-      </section>
-
-      {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 p-3">{error}</div>}
-
-      <div className="mb-6">
-        <input
-          type="search"
-          placeholder="Search digital employees..."
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          style={{
-            width: '100%',
-            maxWidth: '34rem',
-            padding: '0.65rem 1rem',
-            borderRadius: '9999px',
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-          }}
-        />
-      </div>
-
-      {searchResults ? (
-        <Section title={`Search results (${searchResults.length})`} workers={searchResults} onDeploy={handleDeploy} />
-      ) : (
-        <>
-          <div className="flex gap-3 overflow-x-auto pb-4 mb-4">
-            {['Single digital employees', '24/7/365', 'Workspace agnostic', 'Human governed', 'ORCA Protect'].map((category) => (
-              <span key={category} className="px-4 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>{category}</span>
-            ))}
+    <>
+      <main className="orca-store">
+        <section className="orca-hero">
+          <div className="orca-hero__content">
+            <span className="orca-kicker">ORCA DIGITAL WORKFORCE PLATFORM</span>
+            <h1>Powering the AI Workforce</h1>
+            <p>Discover, interview, test, and hire digital employees that support human teams and work inside the real tools your business authorizes.</p>
+            <div className="orca-hero__actions">
+              <Link className="orca-button orca-button--primary orca-button--large" to="/store/employees">Browse digital employees</Link>
+              <Link className="orca-button orca-button--glass orca-button--large" to="/store/integrations">See supported tools</Link>
+            </div>
+            <div className="orca-hero__proof">
+              <span><strong>{catalog?.counts?.employees || 0}</strong> published digital employees</span>
+              <span><strong>{catalog?.counts?.teams || 0}</strong> teams</span>
+              <span><strong>{catalog?.counts?.departments || 0}</strong> departments</span>
+              <span><strong>35%</strong> launch salary rate</span>
+            </div>
           </div>
-          <Section title="Top Deployed" workers={topWorkers} onDeploy={handleDeploy} />
-          <Section title="Trending" workers={trending} onDeploy={handleDeploy} />
-          <Section title="Editors' Choice" workers={editorsPick} onDeploy={handleDeploy} />
-        </>
-      )}
-    </main>
+          <div className="orca-hero__visual" aria-hidden="true">
+            <div className="orca-hero__ring orca-hero__ring--one" />
+            <div className="orca-hero__ring orca-hero__ring--two" />
+            <div className="orca-hero__orb"><OrcaLogo compact /></div>
+          </div>
+        </section>
+
+        <section className="orca-store-toolbar" aria-label="Store search and catalog navigation">
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view.replaceAll('-', ' ')}...`} aria-label="Search ORCA Store" />
+          <nav className="orca-store-tabs" aria-label="Catalog types">
+            {(catalog?.navigation || []).slice(0, 4).map((item) => (
+              <Link key={item.key} to={item.href} className={view === item.key ? 'is-active' : ''}>{item.label}{Number.isFinite(item.count) ? ` (${item.count})` : ''}</Link>
+            ))}
+          </nav>
+        </section>
+
+        {error ? <div className="orca-error-state"><p>{error}</p><button type="button" className="orca-button orca-button--primary" onClick={refresh}>Retry</button></div> : null}
+        {loading ? <div className="orca-loading-state">Loading the ORCA Store…</div> : null}
+
+        {!loading && !error && view === 'employees' ? (
+          <CatalogCarousel title="Digital Employees" subtitle="Named professionals with avatars, experience, skills, human oversight, and salary-based launch pricing." emptyMessage="No digital employees match this search.">
+            {employees.map((employee) => <WorkerCard key={employee.id} worker={employee} />)}
+          </CatalogCarousel>
+        ) : null}
+
+        {!loading && !error && view === 'teams' ? (
+          <CatalogCarousel title="Digital Employee Teams" subtitle="Coordinated groups of digital employees with defined roles and one human authority." emptyMessage="No digital employee teams match this search.">
+            {teams.map((team) => <WorkforceBundleCard key={team.id} bundle={team} />)}
+          </CatalogCarousel>
+        ) : null}
+
+        {!loading && !error && view === 'departments' ? (
+          <CatalogCarousel title="Digital Employee Departments" subtitle="Governed department plans with workforce makeup, salary benchmarks, and customer-controlled authority." emptyMessage="No digital employee departments match this search.">
+            {departments.map((department) => <WorkforceBundleCard key={department.id} bundle={department} />)}
+          </CatalogCarousel>
+        ) : null}
+
+        {!loading && !error && view === 'integrations' ? (
+          <section className="orca-catalog-section">
+            <div className="orca-catalog-section__heading"><div><h2>Works With Your Tools</h2><p>Every card comes from the live connector catalog and states whether the adapter is actually available or still requires provider configuration.</p></div></div>
+            <div className="orca-integration-grid">{integrations.map((integration) => <IntegrationCard key={integration.id} integration={integration} />)}</div>
+          </section>
+        ) : null}
+
+        {!loading && !error && view === 'business' ? <BusinessSection /> : null}
+        {!loading && !error && view === 'enterprise' ? <EnterpriseSection /> : null}
+        {!loading && !error && view === 'pricing' ? <PricingSection policy={catalog?.pricing_policy} /> : null}
+      </main>
+      <OrcaFooter navigation={catalog?.navigation || []} />
+    </>
   )
 }
 
-function Section({ title, workers, onDeploy }) {
+function BusinessSection() {
   return (
-    <section className="mb-8">
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-bold">{title}</h2>
-      </div>
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {workers.map((worker) => <WorkerCard key={worker.id} worker={worker} onDeploy={onDeploy} />)}
-        {workers.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>No digital employees matched this search.</p>}
-      </div>
+    <section className="orca-info-page">
+      <span className="orca-section-eyebrow">FOR BUSINESS</span>
+      <h2>Support your people. Cover gaps. Keep work moving.</h2>
+      <p>Start with one digital employee, add a coordinated team, or build a governed department. Human managers retain policy, approval, escalation, and final decision authority.</p>
+      <div className="orca-info-grid"><article><strong>Support mode</strong><span>Delegated work alongside human employees.</span></article><article><strong>Coverage mode</strong><span>Nights, weekends, absences, and demand surges.</span></article><article><strong>Role-fill mode</strong><span>A defined role when a business has an operational vacancy.</span></article></div>
+    </section>
+  )
+}
+
+function EnterpriseSection() {
+  return (
+    <section className="orca-info-page">
+      <span className="orca-section-eyebrow">ENTERPRISE</span>
+      <h2>Governed digital workforce infrastructure.</h2>
+      <p>Enterprise deployment requires organization controls, isolated credentials, least-privilege permissions, approval workflows, audit history, monitoring, pause, rollback, and uninstall.</p>
+      <div className="orca-info-grid"><article><strong>Human authority</strong><span>Named owners and approval policies.</span></article><article><strong>ORCA Protect</strong><span>Permission, runtime, and lifecycle controls.</span></article><article><strong>Verified outcomes</strong><span>Evidence-backed money made and money saved.</span></article></div>
+    </section>
+  )
+}
+
+function PricingSection({ policy }) {
+  const rate = policy?.launch_rate_percent || 35
+  const savings = policy?.customer_savings_percent || 65
+  return (
+    <section className="orca-info-page">
+      <span className="orca-section-eyebrow">PRICING</span>
+      <h2>Premium role-based pricing—not cheap app pricing.</h2>
+      <p>Each digital employee begins at {rate}% of the comparable human role’s regular salary. That creates approximately {savings}% salary savings while preserving enough revenue to operate, govern, support, and improve the workforce.</p>
+      <div className="orca-pricing-rule"><strong>ORCA monthly launch price</strong><span>{rate}% × comparable regular monthly salary</span></div>
     </section>
   )
 }

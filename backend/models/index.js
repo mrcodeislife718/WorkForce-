@@ -18,9 +18,31 @@ const Subscription = require('./Subscription');
 const RuntimeJob = require('./RuntimeJob');
 const ApprovalRequest = require('./ApprovalRequest');
 const Review = require('./Review');
+const WorkforceBundle = require('./WorkforceBundle');
+const WorkforceBundleMember = require('./WorkforceBundleMember');
 
 Worker.hasMany(WorkerPermission, { foreignKey: 'worker_id' });
 WorkerPermission.belongsTo(Worker, { foreignKey: 'worker_id' });
+
+WorkforceBundle.belongsToMany(Worker, {
+  through: WorkforceBundleMember,
+  foreignKey: 'workforce_bundle_id',
+  otherKey: 'worker_id',
+  as: 'Members',
+});
+Worker.belongsToMany(WorkforceBundle, {
+  through: WorkforceBundleMember,
+  foreignKey: 'worker_id',
+  otherKey: 'workforce_bundle_id',
+  as: 'WorkforceBundles',
+});
+WorkforceBundle.hasMany(WorkforceBundleMember, {
+  foreignKey: 'workforce_bundle_id',
+  as: 'Memberships',
+});
+WorkforceBundleMember.belongsTo(WorkforceBundle, { foreignKey: 'workforce_bundle_id' });
+Worker.hasMany(WorkforceBundleMember, { foreignKey: 'worker_id' });
+WorkforceBundleMember.belongsTo(Worker, { foreignKey: 'worker_id' });
 
 User.hasMany(WorkspaceConnection, { foreignKey: 'user_id' });
 WorkspaceConnection.belongsTo(User, { foreignKey: 'user_id' });
@@ -114,4 +136,6 @@ module.exports = {
   RuntimeJob,
   ApprovalRequest,
   Review,
+  WorkforceBundle,
+  WorkforceBundleMember,
 };
