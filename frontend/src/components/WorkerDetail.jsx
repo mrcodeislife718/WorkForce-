@@ -31,25 +31,27 @@ export default function WorkerDetail() {
   if (error) return <main className="orca-detail-shell"><div className="orca-error-state">{error}</div></main>
   if (!worker) return <main className="orca-detail-shell"><div className="orca-loading-state">Loading digital employee…</div></main>
 
-  const profile = employeeProfile(worker)
-  const pricing = employeePricing(worker)
+  const catalogEmployee = (catalog?.employees || []).find((employee) => employee.id === worker.id)
+  const resolvedWorker = catalogEmployee ? { ...worker, ...catalogEmployee } : worker
+  const profile = employeeProfile(resolvedWorker)
+  const pricing = employeePricing(resolvedWorker)
 
   return (
     <>
       <main className="orca-detail-shell">
         <Link className="orca-back-link" to="/store/employees">← Back to digital employees</Link>
         <section className="orca-detail-hero">
-          <div className="orca-detail-hero__avatar"><DigitalEmployeeAvatar name={profile.displayName} variant={profile.avatarVariant} src={avatarSource(worker)} /></div>
+          <div className="orca-detail-hero__avatar"><DigitalEmployeeAvatar name={profile.displayName} variant={profile.avatarVariant} src={avatarSource(resolvedWorker)} /></div>
           <div className="orca-detail-hero__content">
-            <span className="orca-section-eyebrow">{worker.developer_name || 'ORCA Studios'} · {worker.readiness_state || 'defined'}</span>
+            <span className="orca-section-eyebrow">{resolvedWorker.developer_name || 'ORCA Studios'} · {resolvedWorker.readiness_state || 'defined'}</span>
             <h1>{profile.displayName}</h1>
             <h2>{profile.roleTitle}</h2>
-            <p>{worker.description}</p>
+            <p>{resolvedWorker.description}</p>
             <div className="orca-work-mode-row">{profile.workModes.map((mode) => <span key={mode}>{normalizeMode(mode)}</span>)}</div>
             <div className="orca-detail-hero__actions">
-              <button type="button" className="orca-button orca-button--primary" onClick={() => navigate(`/interview/${worker.id}`)}>Interview</button>
-              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/sample/${worker.id}`)}>Assign sample work</button>
-              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/purchase/${worker.id}`)}>Select plan</button>
+              <button type="button" className="orca-button orca-button--primary" onClick={() => navigate(`/interview/${resolvedWorker.id}`)}>Interview</button>
+              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/sample/${resolvedWorker.id}`)}>Assign sample work</button>
+              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/purchase/${resolvedWorker.id}`)}>Select plan</button>
             </div>
           </div>
         </section>
@@ -67,9 +69,9 @@ export default function WorkerDetail() {
           </article>
           <article>
             <h3>Human collaboration</h3>
-            <p>{worker.support_summary || 'Supports human teams and provides role coverage.'}</p>
+            <p>{resolvedWorker.support_summary || 'Supports human teams and provides role coverage.'}</p>
             <strong>Oversight</strong>
-            <p>{worker.human_oversight || 'A customer-assigned human manager owns policy, approvals, escalation, and final decisions.'}</p>
+            <p>{resolvedWorker.human_oversight || 'A customer-assigned human manager owns policy, approvals, escalation, and final decisions.'}</p>
           </article>
           <article>
             <h3>Launch pricing</h3>
