@@ -123,7 +123,7 @@ async function loadBundles(type) {
 
 async function loadIntegrations() {
   const definitions = await ConnectorDefinition.findAll({
-    where: { status: ['active', 'not_configured'] },
+    where: { status: { [Op.in]: ['active', 'not_configured'] } },
     attributes: { exclude: ['configuration_schema'] },
     order: [['category', 'ASC'], ['name', 'ASC']],
   });
