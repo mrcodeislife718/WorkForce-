@@ -1,52 +1,65 @@
 import React from 'react'
-import { StarIcon } from '@heroicons/react/20/solid'
 import { useNavigate } from 'react-router-dom'
+import DigitalEmployeeAvatar from './DigitalEmployeeAvatar.jsx'
+import { avatarSource, currency, employeePricing, employeeProfile, normalizeMode } from '../data/catalogFormatters.js'
 
-export default function WorkerCard({ worker, onDeploy }) {
-  const stars = Math.round(worker.avg_rating || 0)
+function readinessLabel(employee) {
+  const state = String(employee.readiness_state || 'defined').replaceAll('_', ' ')
+  return state.replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+export default function WorkerCard({ worker }) {
   const navigate = useNavigate()
+  const profile = employeeProfile(worker)
+  const pricing = employeePricing(worker)
 
   return (
-    <article
-      style={{
-        backgroundColor: 'var(--bg-secondary)',
-        borderRadius: '0.75rem',
-        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        border: '1px solid var(--border-color)',
-        padding: '1rem',
-        width: '17rem',
-        flexShrink: 0,
-        cursor: 'pointer',
-      }}
-      onClick={() => navigate(`/worker/${worker.id}`)}
-    >
-      <div className="flex items-start gap-3">
-        <div className="text-4xl">{worker.icon_url || '🤖'}</div>
-        <div>
-          <h3 className="font-bold m-0">{worker.name}</h3>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>ORCA Studios · 24/7/365</p>
-          <div className="flex items-center gap-1 mt-1">
-            {[...Array(5)].map((_, index) => (
-              <StarIcon key={index} className="h-4 w-4" style={{ color: index < stars ? '#fbbf24' : '#d1d5db' }} />
-            ))}
-            <span className="text-xs ml-1" style={{ color: 'var(--text-secondary)' }}>({worker.total_reviews || 0})</span>
-          </div>
+    <article className="orca-employee-card" aria-label={`${profile.displayName}, ${profile.roleTitle}`}>
+      <div className="orca-candidate-card__visual">
+        <DigitalEmployeeAvatar name={profile.displayName} variant={profile.avatarVariant} src={avatarSource(worker)} />
+        <div className="orca-employee-card__badges">
+          <span className="orca-badge orca-badge--availability">24/7/365</span>
+          <span className="orca-badge orca-badge--verified">{readinessLabel(worker)}</span>
         </div>
       </div>
-      <p className="text-sm mt-3 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{worker.description}</p>
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="text-xs rounded-full px-2 py-1 font-semibold" style={{ backgroundColor: 'rgba(14, 77, 255, 0.1)', color: 'var(--accent)' }}>Works in your tools</span>
-        <button
-          onClick={(event) => {
-            event.stopPropagation()
-            onDeploy(worker.id)
-          }}
-          className="rounded-full bg-orca-deep-blue text-white text-sm font-semibold px-4 py-1.5"
-        >
-          Deploy
-        </button>
+      <div className="orca-employee-card__body">
+        <p className="orca-employee-card__developer">{worker.developer_name || 'ORCA Studios'}</p>
+        <h3>{profile.displayName}</h3>
+        <p className="orca-candidate-card__role">{profile.roleTitle}</p>
+        <div className="orca-candidate-card__facts">
+          <span><small>Department</small><strong>{profile.department}</strong></span>
+          <span><small>Career level</small><strong>{profile.careerLevel}</strong></span>
+          <span><small>Experience</small><strong>{profile.experience}</strong></span>
+        </div>
+        <div className="orca-candidate-card__skills">
+          {profile.skills.slice(0, 4).map((skill) => <span key={skill}>{skill}</span>)}
+        </div>
+        <p className="orca-employee-card__description">{worker.description}</p>
+        <div className="orca-candidate-card__collaboration">
+          <strong>Works with your people</strong>
+          <span>{worker.support_summary || 'Supports human teams, covers operational gaps, and reports to the assigned human manager.'}</span>
+        </div>
+        <div className="orca-work-mode-row">
+          {profile.workModes.map((mode) => <span key={mode}>{normalizeMode(mode)}</span>)}
+        </div>
+        {pricing.orca_monthly_price > 0 ? (
+          <div className="orca-labor-price-box">
+            <div><span>Regular human salary benchmark</span><s>{currency(pricing.regular_salary_monthly)}/mo</s></div>
+            <div><span>ORCA launch rate ({pricing.launch_rate_percent}%)</span><strong>{currency(pricing.orca_monthly_price)}<small>/mo</small></strong></div>
+            <p>{currency(pricing.monthly_salary_savings)} monthly salary savings at launch.</p>
+          </div>
+        ) : (
+          <div className="orca-labor-price-box orca-labor-price-box--pending">
+            <strong>Salary benchmark required</strong>
+            <p>ORCA does not display a cheap placeholder price.</p>
+          </div>
+        )}
+        <div className="orca-employee-card__actions">
+          <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/interview/${worker.id}`)}>Interview</button>
+          <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/sample/${worker.id}`)}>Sample work</button>
+          <button type="button" className="orca-button orca-button--primary" onClick={() => navigate(`/worker/${worker.id}`)}>View full profile</button>
+        </div>
       </div>
-      <div className="mt-2 text-sm font-semibold">From ${worker.base_price}/mo</div>
     </article>
   )
 }
