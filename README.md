@@ -1,59 +1,42 @@
-# ORCA
+# Workforce
 
-**A digital labor marketplace, deployment, governance, and workforce-operations platform.**
+**A digital workforce marketplace, deployment, governance, and workforce-operations platform.**
 
 > **Powering the AI Workforce.**
 
-ORCA is designed to make digital employees discoverable, testable, governable, deployable, monitorable, and replaceable through one commercial platform.
+Workforce is designed to make digital workers discoverable, testable, governable, deployable, monitorable, updateable, replaceable, and removable through one commercial platform.
 
-The product combines **ORCA Store**, **ORCA Console**, and **ORCA Protect** across a catalog designed for approximately **650 digital employees**. It is not merely an agent directory or downloadable prompt marketplace. ORCA manages the complete lifecycle of digital labor from publishing and discovery through permission review, subscription, installation, operation, monitoring, support, rollback, and removal.
-
-## Mission
-
-ORCA is designed to create a professional operating market for digital employees that organizations can evaluate and deploy with the same seriousness applied to software, vendors, and human workforce systems.
-
-Its goals are to:
-
-- provide a large organized catalog of specialized digital employees;
-- make worker capabilities, permissions, integrations, versions, pricing, and evidence understandable before deployment;
-- allow customers to test workers safely before granting operational access;
-- manage subscriptions, installation, connectors, workspace deployment, and lifecycle state;
-- give customers one console for their active digital workforce;
-- protect organizations through permission review, monitoring, policy, auditability, pause, replacement, rollback, and uninstall;
-- support creators and publishers with worker submission, versioning, distribution, earnings, and performance information;
-- operate as the commercial infrastructure layer for digital labor.
+The product combines **Workforce Store**, **Workforce Console**, and **Workforce Protect**. It is not merely an agent directory or prompt marketplace. Workforce manages the lifecycle of digital labor from publishing and discovery through permission review, subscription, installation, operation, monitoring, support, rollback, and removal.
 
 ## Product system
 
 ```text
-ORCA
-├── ORCA Store
-├── ORCA Console
-└── ORCA Protect
+Workforce
+├── Workforce Store
+├── Workforce Console
+└── Workforce Protect
 ```
 
-### ORCA Store
+### Workforce Store
 
-The marketplace and discovery surface for digital employees.
+The marketplace and discovery surface for digital workers.
 
-ORCA Store is intended to support:
+It is designed to support:
 
-- worker categories and collections;
-- search, filtering, and recommendations;
-- worker profiles and demonstrations;
-- capabilities and supported tasks;
+- worker categories, collections, search, and filtering;
+- worker profiles, capabilities, supported tasks, and demonstrations;
 - pricing and subscription models;
 - required tools, integrations, and permissions;
-- versions, release notes, and status;
+- versions, release notes, and lifecycle status;
 - ratings, reviews, and deployment history;
 - publisher and ownership information;
 - installation and purchase workflows.
 
-### ORCA Console
+### Workforce Console
 
-The customer’s digital workforce operating center.
+The customer's digital-workforce operating center.
 
-ORCA Console is intended to manage:
+It is designed to manage:
 
 - subscribed and installed workers;
 - workspace and tool connections;
@@ -66,11 +49,11 @@ ORCA Console is intended to manage:
 - pause, replacement, rollback, and uninstall;
 - support, incidents, and operational history.
 
-### ORCA Protect
+### Workforce Protect
 
 The trust, permission, safety, and governance layer.
 
-ORCA Protect is intended to provide:
+It is designed to provide:
 
 - pre-installation permission review;
 - capability and data-access boundaries;
@@ -83,15 +66,15 @@ ORCA Protect is intended to provide:
 - emergency pause and revocation;
 - controlled rollback and uninstall.
 
-## Digital employee lifecycle
+## Digital worker lifecycle
 
 ```text
 Creator or publisher submits worker
-    -> worker identity and version recorded
+    -> identity and version recorded
     -> capabilities and permissions declared
     -> technical and policy review
     -> sandbox evaluation and evidence
-    -> listing published in ORCA Store
+    -> listing published in Workforce Store
     -> customer discovers and evaluates worker
     -> subscription or purchase
     -> permission review and authorization
@@ -101,11 +84,11 @@ Creator or publisher submits worker
     -> update, pause, replace, roll back, or uninstall
 ```
 
-## Intended platform architecture
+## Platform architecture
 
 ```text
 Public and customer surfaces
-├── ORCA Store
+├── Workforce Store
 ├── Worker profile and comparison
 ├── Customer account and billing
 ├── Creator and publisher portal
@@ -138,7 +121,7 @@ Deployment and connectors
 └── Update, pause, rollback, replacement, and uninstall
               │
               ▼
-ORCA Console
+Workforce Console
 ├── Active workforce inventory
 ├── Worker activity and status
 ├── Usage and cost
@@ -147,7 +130,7 @@ ORCA Console
 └── Incidents, support, and lifecycle history
               │
               ▼
-ORCA Protect
+Workforce Protect
 ├── Policy enforcement
 ├── Data and tool boundaries
 ├── Monitoring and alerts
@@ -156,28 +139,11 @@ ORCA Protect
 └── Trust and integrity services
 ```
 
-## Worker record
+## Current implementation foundation
 
-A complete ORCA worker record is intended to bind:
+The current repository contains an initial frontend and backend implementation foundation for **Workforce Store**.
 
-- canonical worker identity;
-- publisher and ownership;
-- category and description;
-- supported tasks and capabilities;
-- required tools and permissions;
-- supported connectors and deployment environments;
-- pricing model and commercial terms;
-- version and release notes;
-- evaluation and demonstration evidence;
-- status, deprecation, and replacement information;
-- ratings, reviews, deployments, and operational performance;
-- support and documentation.
-
-## Current repository foundation
-
-The current repository contains an initial frontend and backend implementation snapshot for ORCA Store.
-
-The existing backend foundation includes:
+The existing implementation includes:
 
 - Node.js and Express;
 - PostgreSQL through Sequelize;
@@ -185,51 +151,20 @@ The existing backend foundation includes:
 - user, worker, worker-permission, deployment, and review models;
 - subscription, one-time, and free pricing models;
 - worker version and release-note records;
-- deployment state including pending, active, paused, and uninstalled;
+- deployment states including pending, active, paused, and uninstalled;
 - connector-oriented deployment records;
 - Slack, Gmail, Shopify, Notion, and HubSpot permission categories;
-- seed data for initial digital employee profiles;
+- seed data for initial digital-worker profiles;
 - frontend and backend product surfaces.
 
-This implementation is a foundation for the larger ORCA architecture. The full approximately 650-worker catalog, complete evaluation system, ORCA Console, and ORCA Protect should not be treated as implemented merely because they are part of the intended product.
-
-## Creator and publisher system
-
-ORCA is intended to support a two-sided ecosystem in which qualified creators and organizations can publish digital employees while customers retain clear control over what they install.
-
-Publisher capabilities include:
-
-- worker creation and submission;
-- profile, media, demonstration, and documentation management;
-- capabilities, tools, permissions, and integration declarations;
-- pricing and licensing configuration;
-- versioning and release management;
-- customer support and incident response;
-- deployment, review, usage, and earnings reporting;
-- deprecation and successor-worker management.
-
-## Workforce operations
-
-ORCA treats digital employees as durable operational assets rather than one-time downloads.
-
-The workforce layer is intended to track:
-
-- assigned organization and workspace;
-- configured tools and access;
-- current version and deployment state;
-- operating schedule and task class;
-- activity, quality, errors, and outcomes;
-- cost and usage;
-- permission changes;
-- updates and incidents;
-- support, replacement, rollback, and removal history.
+The repository is an implementation foundation for the larger Workforce architecture. Planned product surfaces are not presented as completed unless supported by the current source.
 
 ## Security and governance
 
 - Explicit capability and permission declarations
 - No operational authority from marketplace presence alone
 - Customer approval before connector or workspace access
-- Encrypted provider tokens and credentials
+- Protected provider tokens and credentials
 - Product- and workspace-scoped deployment records
 - Versioned worker and permission history
 - Sandboxed evaluation before protected deployment where applicable
@@ -238,33 +173,32 @@ The workforce layer is intended to track:
 - Separation between publisher claims and supporting evidence
 - Human customer authority over installed digital labor
 
-## Commercial model
+## Commercial direction
 
-ORCA is designed to support revenue through:
+Workforce is designed to support revenue through:
 
-- digital employee subscriptions;
+- digital-worker subscriptions;
 - one-time worker licenses;
-- free workers with paid services or upgrades;
 - marketplace transaction fees;
 - creator and publisher revenue sharing;
 - enterprise workforce management;
-- ORCA Protect governance services;
+- Workforce Protect governance services;
 - private catalogs and organization deployments;
 - integration, support, and deployment services;
 - performance, analytics, and workforce-intelligence products.
 
-## Independent product boundary
+## Product boundary
 
-ORCA is an independent product with its own marketplace, deployment model, governance layer, source, brand, and commercial identity.
+Workforce is an independent product with its own marketplace, deployment model, governance layer, source, brand, and commercial identity.
 
-ORCA may integrate with Axion, Teamwork, Sessions, Codeable, Epiphany, or other systems through controlled interfaces, but it is not a feature or submodule of those products.
+Workforce may integrate with Axion, Teamwork, Sessions, Codeable, Epiphany, or other systems through controlled interfaces, but it is not a feature or submodule of those products.
 
 ## Repository boundary
 
-This repository contains the controlled public ORCA Store implementation and product documentation. Proprietary worker definitions, complete catalog data, protected evaluation methods, customer credentials, connector secrets, ORCA Protect policies, enterprise configurations, and commercial operating assets are maintained privately.
+This repository contains the controlled public Workforce Store implementation and product documentation. Proprietary worker definitions, complete catalog data, protected evaluation methods, customer credentials, connector secrets, Workforce Protect policies, enterprise configurations, and commercial operating assets remain private.
 
-## Ownership and licensing
+## Ownership
 
-ORCA is independently designed and developed by **Charles Castillo**, Software Engineer and AI Systems Engineer.
+Workforce is independently designed and developed by **Charles Castillo**, Software Engineer and AI Systems Engineer.
 
 All rights reserved. No source, architecture, worker catalog, documentation, branding, deployment system, governance system, or commercial rights are granted without explicit written authorization.
