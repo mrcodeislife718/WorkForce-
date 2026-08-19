@@ -8,6 +8,7 @@ const {
 } = require('../models');
 const registry = require('../connectors/registerBuiltins')();
 const { loadSecrets } = require('../services/connectionService');
+const { enforceAction } = require('./PolicyEngine');
 
 function assertResourceAllowed(deploymentConnection, input = {}) {
   const selected = deploymentConnection.selected_resource_ids || [];
@@ -17,7 +18,7 @@ function assertResourceAllowed(deploymentConnection, input = {}) {
   }
 }
 
-async function execute({ deploymentId, taskRunId = null, capabilityKey, input = {} }) {
+async function execute({ deploymentId, taskRunId = null, capabilityKey, input = {}, policyContext = {} }) {
   const grant = await DeploymentCapabilityGrant.findOne({
     where: {
       deployment_id: deploymentId,
@@ -40,7 +41,18 @@ async function execute({ deploymentId, taskRunId = null, capabilityKey, input = 
   if (!deploymentConnection || deploymentConnection.status !== 'active') {
     throw new Error('The approved workspace binding is not active.');
   }
+
+  // Legacy boundary assertion remains as defense in depth. The policy engine is
+  // now the authoritative deterministic decision point for every side effect.
   assertResourceAllowed(deploymentConnection, input);
+  const policyDecision = enforceAction({
+    deployment,
+    deploymentConnection,
+    grant,
+    capabilityKey,
+    input,
+    context: policyContext,
+  });
 
   const connection = deploymentConnection.WorkspaceConnection;
   const adapter = registry.get(connection.ConnectorDefinition.adapter_key);
@@ -57,7 +69,7 @@ async function execute({ deploymentId, taskRunId = null, capabilityKey, input = 
     operation: input.operation || capabilityKey,
     status: 'running',
     started_at: startedAt,
-    metadata: {},
+    metadata: { policy_decision: policyDecision },
   });
 
   try {
@@ -79,13 +91,14 @@ async function execute({ deploymentId, taskRunId = null, capabilityKey, input = 
       records_updated: Number(result?.records_updated || 0),
       records_deleted: Number(result?.records_deleted || 0),
       metadata: {
+        policy_decision: policyDecision,
         provider_status: result?.status || null,
         provider_request_id: result?.headers?.['x-request-id'] || null,
       },
     });
     await deployment.update({ last_activity_at: completedAt });
     await connection.update({ last_used_at: completedAt });
-    return { execution, result };
+    return { execution, result, policyDecision };
   } catch (error) {
     const completedAt = new Date();
     await execution.update({
@@ -94,6 +107,7 @@ async function execute({ deploymentId, taskRunId = null, capabilityKey, input = 
       duration_ms: completedAt.getTime() - startedAt.getTime(),
       error_code: error.code || 'CAPABILITY_EXECUTION_FAILED',
       error_message_redacted: String(error.message || 'Capability execution failed.').slice(0, 2000),
+      metadata: { policy_decision: policyDecision },
     });
     throw error;
   }
