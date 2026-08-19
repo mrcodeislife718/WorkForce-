@@ -20,6 +20,7 @@ const telemetryRoutes = require('./routes/telemetry');
 const consoleRoutes = require('./routes/console');
 const runtimeRoutes = require('./routes/runtime');
 const approvalRoutes = require('./routes/approvals');
+const controlPlaneRoutes = require('./routes/controlPlane');
 const { router: billingRoutes, webhook: billingWebhook } = require('./routes/billing');
 const { router: storeCatalogRoutes } = require('./routes/storeCatalog');
 const { startRuntimeWorker, stopRuntimeWorker } = require('./runtime/JobRunner');
@@ -191,6 +192,7 @@ app.use('/api/runtime', runtimeRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/console', consoleRoutes);
+app.use('/api/control-plane', controlPlaneRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);
