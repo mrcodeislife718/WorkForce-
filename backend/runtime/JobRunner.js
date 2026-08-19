@@ -21,6 +21,18 @@ const { generateJson, generateText } = require('../services/modelProvider');
 const { execute: executeCapability } = require('./CapabilityBroker');
 const registry = require('../connectors/registerBuiltins')();
 const { loadSecrets } = require('../services/connectionService');
+const {
+  recordModelCost,
+  recordCapabilityCost,
+  taskCostUsd,
+  deploymentCostUsd,
+  verifyDeterministicOutcome,
+} = require('../services/runtimeAccounting');
+const {
+  writeCheckpoint,
+  restoreCheckpoint,
+  markTerminal,
+} = require('../services/runtimeCheckpoint');
 
 const workerId = `${os.hostname()}:${process.pid}`;
 let timer = null;
@@ -87,6 +99,8 @@ async function processSample(job) {
   const result = {
     output: generated.text,
     usage: generated.usage,
+    estimated_cost_usd: generated.estimated_cost_usd,
+    latency_ms: generated.latency_ms,
     completed_by: assignment.Worker.name,
     completed_at: new Date().toISOString(),
   };
@@ -129,6 +143,15 @@ async function planDeploymentTask(job, deployment, taskRun) {
     maxTokens: Number(process.env.RUNTIME_PLAN_MAX_TOKENS || 1800),
   });
 
+  await recordModelCost({
+    deploymentId: deployment.id,
+    taskRunId: taskRun.id,
+    runtimeJobId: job.id,
+    traceId: job.payload.trace_id || null,
+    generated,
+    purpose: 'task_planning',
+  });
+
   if (!generated.value || !Array.isArray(generated.value.actions)) {
     throw new Error('The model plan did not contain an actions array.');
   }
@@ -138,15 +161,28 @@ async function planDeploymentTask(job, deployment, taskRun) {
     }
   }
 
-  await job.update({
-    payload: {
-      ...job.payload,
+  const payload = {
+    ...job.payload,
+    plan: generated.value,
+    task_run_id: taskRun.id,
+    next_action_index: 0,
+    approved_action_indices: job.payload.approved_action_indices || [],
+    model_provider: generated.provider,
+    model_id: generated.model,
+  };
+  await job.update({ payload });
+  await writeCheckpoint({
+    deploymentId: deployment.id,
+    taskRunId: taskRun.id,
+    runtimeJobId: job.id,
+    traceId: payload.trace_id || null,
+    stage: 'planned',
+    nextActionIndex: 0,
+    state: {
       plan: generated.value,
       task_run_id: taskRun.id,
-      next_action_index: 0,
-      approved_action_indices: job.payload.approved_action_indices || [],
-      model_provider: generated.provider,
-      model_id: generated.model,
+      approved_action_indices: payload.approved_action_indices,
+      action_results: [],
     },
   });
   return generated.value;
@@ -177,9 +213,16 @@ async function processDeploymentTask(job) {
     await taskRun.update({ status: 'running' });
   }
 
+  if (Number(job.attempt_count || 0) > 1 && !job.payload.restored_from_checkpoint_id) {
+    const restored = await restoreCheckpoint(job);
+    if (restored) await job.reload();
+  }
+
   const plan = job.payload.plan || await planDeploymentTask(job, deployment, taskRun);
   const permissions = await WorkerPermission.findAll({ where: { worker_id: deployment.worker_id } });
+  const grants = await DeploymentCapabilityGrant.findAll({ where: { deployment_id: deployment.id, approved: true } });
   const permissionByKey = new Map(permissions.map((permission) => [permission.capability_key, permission]));
+  const grantByKey = new Map(grants.map((grant) => [grant.capability_key, grant]));
   const approvedIndices = new Set(job.payload.approved_action_indices || []);
   let index = Number(job.payload.next_action_index || 0);
   const actionResults = Array.isArray(job.payload.action_results) ? [...job.payload.action_results] : [];
@@ -200,28 +243,68 @@ async function processDeploymentTask(job) {
           reason: `This capability is marked as requiring human approval: ${permission.description}`,
         });
       }
+      const waitingPayload = {
+        ...job.payload,
+        plan,
+        task_run_id: taskRun.id,
+        next_action_index: index,
+        action_results: actionResults,
+      };
       await taskRun.update({ status: 'waiting_for_approval' });
       await job.update({
         status: 'waiting_approval',
-        payload: { ...job.payload, plan, task_run_id: taskRun.id, next_action_index: index, action_results: actionResults },
+        payload: waitingPayload,
         locked_at: null,
         locked_by: null,
+      });
+      await writeCheckpoint({
+        deploymentId: deployment.id,
+        taskRunId: taskRun.id,
+        runtimeJobId: job.id,
+        traceId: waitingPayload.trace_id || null,
+        stage: 'waiting_for_approval',
+        nextActionIndex: index,
+        state: {
+          plan,
+          task_run_id: taskRun.id,
+          approved_action_indices: waitingPayload.approved_action_indices || [],
+          action_results: actionResults,
+        },
       });
       await DeploymentEvent.create({
         deployment_id: deployment.id,
         event_type: 'task.waiting_for_approval',
         severity: 'warning',
         message: `${deployment.Worker.name} is waiting for approval to use ${action.capability_key}.`,
-        metadata: { runtime_job_id: job.id, task_run_id: taskRun.id, capability_key: action.capability_key },
+        metadata: { runtime_job_id: job.id, task_run_id: taskRun.id, capability_key: action.capability_key, trace_id: job.payload.trace_id || null },
       });
       return;
     }
 
+    const grant = grantByKey.get(action.capability_key);
+    const currentTaskCost = await taskCostUsd(taskRun.id);
+    const currentDeploymentCost = await deploymentCostUsd(deployment.id);
+    const estimatedActionCost = Number(grant?.constraints?.estimated_action_cost_usd || 0);
     const executed = await executeCapability({
       deploymentId: deployment.id,
       taskRunId: taskRun.id,
       capabilityKey: action.capability_key,
       input: action.input || {},
+      policyContext: {
+        actionCount: actionResults.length,
+        taskCostUsd: currentTaskCost,
+        deploymentCostUsd: currentDeploymentCost,
+        estimatedActionCostUsd: estimatedActionCost,
+      },
+    });
+    await recordCapabilityCost({
+      deploymentId: deployment.id,
+      taskRunId: taskRun.id,
+      runtimeJobId: job.id,
+      traceId: job.payload.trace_id || null,
+      capabilityKey: action.capability_key,
+      execution: executed.execution,
+      amountUsd: estimatedActionCost,
     });
     actionResults.push({
       capability_key: action.capability_key,
@@ -229,31 +312,77 @@ async function processDeploymentTask(job) {
       status: 'succeeded',
     });
     index += 1;
-    await job.update({
-      payload: { ...job.payload, plan, task_run_id: taskRun.id, next_action_index: index, action_results: actionResults },
+    const progressPayload = {
+      ...job.payload,
+      plan,
+      task_run_id: taskRun.id,
+      next_action_index: index,
+      action_results: actionResults,
+    };
+    await job.update({ payload: progressPayload });
+    await writeCheckpoint({
+      deploymentId: deployment.id,
+      taskRunId: taskRun.id,
+      runtimeJobId: job.id,
+      traceId: progressPayload.trace_id || null,
+      stage: 'action_completed',
+      nextActionIndex: index,
+      state: {
+        plan,
+        task_run_id: taskRun.id,
+        approved_action_indices: progressPayload.approved_action_indices || [],
+        action_results: actionResults,
+      },
     });
   }
 
+  const verification = await verifyDeterministicOutcome({
+    deploymentId: deployment.id,
+    taskRunId: taskRun.id,
+    traceId: job.payload.trace_id || null,
+    actionResults,
+    expectedActionCount: plan.actions.length,
+  });
   const completedAt = new Date();
+  const verified = verification.status === 'verified';
   await taskRun.update({
-    status: 'completed',
+    status: verified ? 'completed' : 'failed',
     completed_at: completedAt,
     duration_ms: taskRun.started_at ? completedAt.getTime() - new Date(taskRun.started_at).getTime() : null,
+    failure_reason: verified ? null : verification.failure_reason,
     output_summary: process.env.TELEMETRY_STORE_SUMMARIES === 'true' ? String(plan.summary || '').slice(0, 4000) : null,
   });
   await job.update({
-    status: 'completed',
-    result: { summary: plan.summary || '', actions: actionResults },
+    status: verified ? 'completed' : 'failed',
+    result: {
+      summary: plan.summary || '',
+      actions: actionResults,
+      verification: {
+        id: verification.id,
+        status: verification.status,
+        score: Number(verification.score),
+      },
+      total_cost_usd: await taskCostUsd(taskRun.id),
+    },
     completed_at: completedAt,
     locked_at: null,
     locked_by: null,
   });
+  await markTerminal(job.id);
   await DeploymentEvent.create({
     deployment_id: deployment.id,
-    event_type: 'task.completed',
-    severity: 'info',
-    message: `${deployment.Worker.name} completed a task.`,
-    metadata: { runtime_job_id: job.id, task_run_id: taskRun.id, action_count: actionResults.length },
+    event_type: verified ? 'task.verified_completed' : 'task.verification_failed',
+    severity: verified ? 'info' : 'error',
+    message: verified
+      ? `${deployment.Worker.name} completed and verified a task.`
+      : `${deployment.Worker.name} completed execution but failed outcome verification.`,
+    metadata: {
+      runtime_job_id: job.id,
+      task_run_id: taskRun.id,
+      action_count: actionResults.length,
+      verification_id: verification.id,
+      trace_id: job.payload.trace_id || null,
+    },
   });
 }
 
@@ -308,6 +437,7 @@ async function failOrRetry(job, error) {
     locked_at: null,
     locked_by: null,
   });
+  await markTerminal(job.id).catch(() => {});
   if (job.sample_assignment_id) {
     await SampleAssignment.update({
       status: 'failed',
@@ -321,7 +451,12 @@ async function failOrRetry(job, error) {
       event_type: 'runtime.job.failed',
       severity: 'error',
       message: 'A digital employee runtime job failed.',
-      metadata: { runtime_job_id: job.id, job_type: job.job_type, error: String(error.message || error).slice(0, 1000) },
+      metadata: {
+        runtime_job_id: job.id,
+        job_type: job.job_type,
+        error: String(error.message || error).slice(0, 1000),
+        trace_id: job.payload?.trace_id || null,
+      },
     });
   }
 }
