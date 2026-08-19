@@ -20,6 +20,9 @@ const ApprovalRequest = require('./ApprovalRequest');
 const Review = require('./Review');
 const WorkforceBundle = require('./WorkforceBundle');
 const WorkforceBundleMember = require('./WorkforceBundleMember');
+const RuntimeCostEvent = require('./RuntimeCostEvent');
+const RuntimeCheckpoint = require('./RuntimeCheckpoint');
+const OutcomeVerification = require('./OutcomeVerification');
 
 Worker.hasMany(WorkerPermission, { foreignKey: 'worker_id' });
 WorkerPermission.belongsTo(Worker, { foreignKey: 'worker_id' });
@@ -112,6 +115,25 @@ ApprovalRequest.belongsTo(Deployment, { foreignKey: 'deployment_id' });
 RuntimeJob.hasMany(ApprovalRequest, { foreignKey: 'runtime_job_id' });
 ApprovalRequest.belongsTo(RuntimeJob, { foreignKey: 'runtime_job_id' });
 
+Deployment.hasMany(RuntimeCostEvent, { foreignKey: 'deployment_id' });
+RuntimeCostEvent.belongsTo(Deployment, { foreignKey: 'deployment_id' });
+TaskRun.hasMany(RuntimeCostEvent, { foreignKey: 'task_run_id' });
+RuntimeCostEvent.belongsTo(TaskRun, { foreignKey: 'task_run_id' });
+RuntimeJob.hasMany(RuntimeCostEvent, { foreignKey: 'runtime_job_id' });
+RuntimeCostEvent.belongsTo(RuntimeJob, { foreignKey: 'runtime_job_id' });
+
+Deployment.hasMany(RuntimeCheckpoint, { foreignKey: 'deployment_id' });
+RuntimeCheckpoint.belongsTo(Deployment, { foreignKey: 'deployment_id' });
+TaskRun.hasMany(RuntimeCheckpoint, { foreignKey: 'task_run_id' });
+RuntimeCheckpoint.belongsTo(TaskRun, { foreignKey: 'task_run_id' });
+RuntimeJob.hasMany(RuntimeCheckpoint, { foreignKey: 'runtime_job_id' });
+RuntimeCheckpoint.belongsTo(RuntimeJob, { foreignKey: 'runtime_job_id' });
+
+Deployment.hasMany(OutcomeVerification, { foreignKey: 'deployment_id' });
+OutcomeVerification.belongsTo(Deployment, { foreignKey: 'deployment_id' });
+TaskRun.hasMany(OutcomeVerification, { foreignKey: 'task_run_id' });
+OutcomeVerification.belongsTo(TaskRun, { foreignKey: 'task_run_id' });
+
 Deployment.hasOne(Review, { foreignKey: 'deployment_id' });
 Review.belongsTo(Deployment, { foreignKey: 'deployment_id' });
 
@@ -138,4 +160,7 @@ module.exports = {
   Review,
   WorkforceBundle,
   WorkforceBundleMember,
+  RuntimeCostEvent,
+  RuntimeCheckpoint,
+  OutcomeVerification,
 };
