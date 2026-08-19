@@ -10,6 +10,7 @@ const bcrypt = require('bcrypt');
 const migrateLegacyUniversalSchema = require('./migrations/legacyUniversalMigration');
 const migrateCompleteFlowSchema = require('./migrations/completeFlowMigration');
 const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
+const migrateMarketControlPlaneSchema = require('./migrations/marketControlPlaneMigration');
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
@@ -205,6 +206,7 @@ async function prepareDatabase() {
     await migrateLegacyUniversalSchema();
     await migrateCompleteFlowSchema();
     await migrateStoreCatalogSchema();
+    await migrateMarketControlPlaneSchema();
   }
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
   if (syncMode === 'alter') await sequelize.sync({ alter: true });
