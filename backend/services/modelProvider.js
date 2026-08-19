@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { estimateModelCost } = require('./runtimeEconomics');
 
 function configuration() {
   const baseUrl = String(process.env.MODEL_API_BASE_URL || '').replace(/\/$/, '');
@@ -29,6 +30,7 @@ function extractText(data) {
 
 async function generateText({ system, messages, temperature = 0.2, maxTokens = 2000 }) {
   const config = configuration();
+  const startedAt = Date.now();
   const response = await axios.post(
     `${config.baseUrl}/chat/completions`,
     {
@@ -54,11 +56,15 @@ async function generateText({ system, messages, temperature = 0.2, maxTokens = 2
     },
   );
 
+  const usage = response.data?.usage || null;
   return {
     text: extractText(response.data),
     provider: config.provider,
     model: config.model,
-    usage: response.data?.usage || null,
+    usage,
+    estimated_cost_usd: estimateModelCost(usage || {}),
+    latency_ms: Date.now() - startedAt,
+    provider_request_id: response.headers?.['x-request-id'] || null,
   };
 }
 
