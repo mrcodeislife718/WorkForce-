@@ -53,7 +53,6 @@ jobs:
       - run: npm install
       - run: npm run check
       - run: npm test
-      - run: npm run migrate:universal
       - run: npm run seed
 
   frontend:
