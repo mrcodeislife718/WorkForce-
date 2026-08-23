@@ -11,6 +11,7 @@ const migrateLegacyUniversalSchema = require('./migrations/legacyUniversalMigrat
 const migrateCompleteFlowSchema = require('./migrations/completeFlowMigration');
 const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
 const migrateMarketControlPlaneSchema = require('./migrations/marketControlPlaneMigration');
+const migratePremiumCatalogMetadata = require('./migrations/premiumCatalogMetadataMigration');
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
@@ -150,6 +151,7 @@ app.get('/api/store/search', async (req, res) => {
         { role_title: { [Op.iLike]: `%${q}%` } },
         { department: { [Op.iLike]: `%${q}%` } },
         { description: { [Op.iLike]: `%${q}%` } },
+        { publisher_name: { [Op.iLike]: `%${q}%` } },
       ];
     }
     return res.json(await Worker.findAll({ where, limit: 50 }));
@@ -158,7 +160,7 @@ app.get('/api/store/search', async (req, res) => {
   }
 });
 
-app.get('/api/workers/:id', async (req, res) => {
+async function digitalEmployeeDetail(req, res) {
   try {
     const worker = await Worker.findByPk(req.params.id, { include: [WorkerPermission] });
     if (!worker) return res.status(404).json({ error: 'Digital employee was not found.' });
@@ -166,9 +168,12 @@ app.get('/api/workers/:id', async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load digital employee.' });
   }
-});
+}
 
-app.get('/api/workers/:id/reviews', async (req, res) => {
+app.get('/api/workers/:id', digitalEmployeeDetail);
+app.get('/api/digital-employees/:id', digitalEmployeeDetail);
+
+async function digitalEmployeeReviews(req, res) {
   try {
     const reviews = await Review.findAll({
       include: [{ model: Deployment, include: [User] }],
@@ -180,7 +185,10 @@ app.get('/api/workers/:id/reviews', async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load reviews.' });
   }
-});
+}
+
+app.get('/api/workers/:id/reviews', digitalEmployeeReviews);
+app.get('/api/digital-employees/:id/reviews', digitalEmployeeReviews);
 
 app.use('/api/store', storeCatalogRoutes);
 app.use('/api/connectors', connectorRoutes);
@@ -211,6 +219,7 @@ async function prepareDatabase() {
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
   if (syncMode === 'alter') await sequelize.sync({ alter: true });
   else if (syncMode === 'create') await sequelize.sync();
+  await migratePremiumCatalogMetadata();
 }
 
 async function start() {
