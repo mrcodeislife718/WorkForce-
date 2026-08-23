@@ -6,6 +6,8 @@ import OrcaFooter from './OrcaFooter.jsx'
 import { avatarSource, currency, employeePricing, employeeProfile, normalizeMode } from '../data/catalogFormatters.js'
 import { useStoreCatalog } from '../contexts/StoreCatalogContext.jsx'
 
+function array(value) { return Array.isArray(value) ? value : [] }
+
 export default function WorkerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -35,6 +37,10 @@ export default function WorkerDetail() {
   const resolvedWorker = catalogEmployee ? { ...worker, ...catalogEmployee } : worker
   const profile = employeeProfile(resolvedWorker)
   const pricing = employeePricing(resolvedWorker)
+  const systems = array(resolvedWorker.supported_systems)
+  const channels = array(resolvedWorker.supported_channels)
+  const evaluations = array(resolvedWorker.evaluation_options)
+  const teamRoles = array(resolvedWorker.team_roles)
 
   return (
     <>
@@ -43,7 +49,7 @@ export default function WorkerDetail() {
         <section className="orca-detail-hero">
           <div className="orca-detail-hero__avatar"><DigitalEmployeeAvatar name={profile.displayName} variant={profile.avatarVariant} src={avatarSource(resolvedWorker)} /></div>
           <div className="orca-detail-hero__content">
-            <span className="orca-section-eyebrow">{resolvedWorker.developer_name || 'ORCA Studios'} · {resolvedWorker.readiness_state || 'defined'}</span>
+            <span className="orca-section-eyebrow">{resolvedWorker.publisher_name || resolvedWorker.developer_name || 'ORCA Studios'} · {resolvedWorker.readiness_state || 'defined'} · {resolvedWorker.evidence_status === 'verified' ? 'verified evidence' : 'evidence pending'}</span>
             <h1>{profile.displayName}</h1>
             <h2>{profile.roleTitle}</h2>
             <p>{resolvedWorker.description}</p>
@@ -63,7 +69,9 @@ export default function WorkerDetail() {
               <div><dt>Department</dt><dd>{profile.department}</dd></div>
               <div><dt>Career level</dt><dd>{profile.careerLevel}</dd></div>
               <div><dt>Experience</dt><dd>{profile.experience}</dd></div>
-              <div><dt>Availability</dt><dd>24/7/365</dd></div>
+              <div><dt>Availability</dt><dd>{resolvedWorker.availability || '24/7/365'}</dd></div>
+              <div><dt>Publisher</dt><dd>{resolvedWorker.publisher_name || resolvedWorker.developer_name || 'ORCA Studios'}{resolvedWorker.publisher_type === 'third_party' ? ' (third-party)' : ' (first-party)'}</dd></div>
+              <div><dt>Protection</dt><dd>{resolvedWorker.protect_level || 'ORCA Protect Standard'}</dd></div>
             </dl>
             <div className="orca-candidate-card__skills">{profile.skills.map((skill) => <span key={skill}>{skill}</span>)}</div>
           </article>
@@ -72,11 +80,28 @@ export default function WorkerDetail() {
             <p>{resolvedWorker.support_summary || 'Supports human teams and provides role coverage.'}</p>
             <strong>Oversight</strong>
             <p>{resolvedWorker.human_oversight || 'A customer-assigned human manager owns policy, approvals, escalation, and final decisions.'}</p>
+            <strong>Execution limits</strong>
+            <p>{resolvedWorker.execution_limits || 'Customer-approved scope, resources, permissions, and policies apply.'}</p>
           </article>
           <article>
             <h3>Launch pricing</h3>
-            {pricing.orca_monthly_price > 0 ? <><p>Regular human salary benchmark: <strong>{currency(pricing.regular_salary_monthly)}/month</strong></p><p>ORCA launch rate: <strong>{currency(pricing.orca_monthly_price)}/month</strong></p><p>Approximate salary savings: <strong>{currency(pricing.monthly_salary_savings)}/month</strong></p></> : <p>A verified salary benchmark is required before purchase.</p>}
+            {pricing.orca_monthly_price > 0 ? <><p>Regular human salary benchmark: <strong>{currency(pricing.regular_salary_monthly)}/month</strong></p><p>ORCA launch rate: <strong>{currency(pricing.orca_monthly_price)}/month</strong></p><p>Approximate salary savings: <strong>{currency(pricing.monthly_salary_savings)}/month</strong></p>{Number(resolvedWorker.activation_fee || 0) > 0 ? <p>Activation fee: <strong>{currency(Number(resolvedWorker.activation_fee))}</strong></p> : null}</> : <p>A verified salary benchmark is required before purchase.</p>}
+            <strong>Included workload</strong>
+            <p>{resolvedWorker.included_workload || 'Finalized during role scoping.'}</p>
+            {resolvedWorker.overage_pricing ? <><strong>Overage policy</strong><p>{resolvedWorker.overage_pricing}</p></> : null}
           </article>
+          <article>
+            <h3>Systems and channels</h3>
+            <p><strong>Systems:</strong> {systems.length ? systems.join(' · ') : 'Selected during connection setup.'}</p>
+            <p><strong>Channels:</strong> {channels.length ? channels.join(' · ') : 'Selected during deployment.'}</p>
+            <p><strong>Included integrations:</strong> {Number(resolvedWorker.integrations_included || 0) || 'Scoped during onboarding'}</p>
+          </article>
+          <article>
+            <h3>Evaluation before deployment</h3>
+            <p>{resolvedWorker.evidence_status === 'verified' ? 'Verified evaluation evidence is available for this digital employee.' : 'Public evaluation evidence has not yet been marked verified. Interview and sample-work flows remain available before purchase.'}</p>
+            <div className="orca-candidate-card__skills">{evaluations.map((option) => <span key={option}>{option}</span>)}</div>
+          </article>
+          {teamRoles.length ? <article><h3>Team composition</h3><p>This product is a coordinated multi-employee workforce.</p><div className="orca-candidate-card__skills">{teamRoles.map((role) => <span key={role}>{role}</span>)}</div></article> : null}
         </section>
 
         <section className="orca-permissions-section">
