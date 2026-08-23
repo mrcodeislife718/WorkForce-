@@ -1,0 +1,73 @@
+name: ORCA CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+      - release/**
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: orca_ci
+          POSTGRES_USER: orca
+          POSTGRES_PASSWORD: orca_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orca -d orca_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: orca_ci
+      DB_USER: orca
+      DB_PASSWORD: orca_ci_password
+      DB_SYNC_MODE: create
+      RUN_LEGACY_MIGRATIONS: true
+      JWT_SECRET: orca-ci-jwt-secret-not-for-production
+      ORCA_CREDENTIAL_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      ORCA_CREDENTIAL_KEY_VERSION: 1
+      PUBLIC_API_URL: http://localhost:5000
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - run: npm run check
+      - run: npm test
+      - run: npm run seed
+
+  frontend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - run: npm run build

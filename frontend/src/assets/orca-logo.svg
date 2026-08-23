@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 150" role="img" aria-labelledby="title desc">
+  <title id="title">ORCA</title><desc id="desc">ORCA whale mark and wordmark</desc>
+  <defs>
+    <linearGradient id="ocean" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#31e5ff"/><stop offset=".48" stop-color="#0e6bff"/><stop offset="1" stop-color="#613cff"/></linearGradient>
+    <radialGradient id="deep" cx="35%" cy="25%" r="85%"><stop stop-color="#154b8b"/><stop offset="1" stop-color="#04101f"/></radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g transform="translate(5 5)">
+    <circle cx="70" cy="70" r="62" fill="url(#deep)" stroke="url(#ocean)" stroke-width="7"/>
+    <path d="M20 84c18-42 50-62 91-51-13 5-24 14-31 25 17-5 31-2 43 8-10 0-19 3-26 9-9 28-34 45-63 38 9-7 15-15 18-24-13 8-24 9-32 6Z" fill="#f8fdff"/>
+    <path d="M35 83c13-25 33-38 59-38-16 8-26 20-29 36 11-7 23-9 36-5-9 5-16 12-21 21-18 10-34 8-45-14Z" fill="url(#ocean)" opacity=".9"/>
+    <circle cx="96" cy="58" r="3.8" fill="#07111f"/>
+    <path d="M16 104c20 14 43 19 68 13" fill="none" stroke="#31e5ff" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+    <path d="M31 25c21-17 50-22 75-10" fill="none" stroke="#70efff" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <circle cx="70" cy="70" r="67" fill="none" stroke="#31e5ff" stroke-width="2" opacity=".28" filter="url(#glow)"/>
+  </g>
+  <g fill="#f7fbff" transform="translate(155 39)">
+    <path d="M0 36C0 14 16 0 39 0s39 14 39 36-16 36-39 36S0 58 0 36Zm18 0c0 12 8 20 21 20s21-8 21-20-8-20-21-20-21 8-21 20Z"/>
+    <path d="M93 2h38c20 0 33 11 33 28 0 12-6 21-17 25l21 15h-25l-18-13h-14v13H93V2Zm18 16v23h20c9 0 15-4 15-12 0-7-6-11-15-11h-20Z"/>
+    <path d="M178 36c0-22 16-36 40-36 18 0 31 8 37 22l-17 7c-3-8-10-13-20-13-13 0-22 8-22 20s9 20 22 20c10 0 17-5 20-13l17 7c-6 14-19 22-37 22-24 0-40-14-40-36Z"/>
+    <path d="M291 2h21l33 68h-20l-7-15h-34l-7 15h-19l33-68Zm0 38h20l-10-22-10 22Z"/>
+  </g>
+</svg>

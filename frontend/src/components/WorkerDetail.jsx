@@ -1,65 +1,118 @@
-import React, { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import axios from 'axios'
-import { StarIcon } from '@heroicons/react/20/solid'
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import api from '../api/client'
+import DigitalEmployeeAvatar from './DigitalEmployeeAvatar.jsx'
+import OrcaFooter from './OrcaFooter.jsx'
+import { avatarSource, currency, employeePricing, employeeProfile, normalizeMode } from '../data/catalogFormatters.js'
+import { useStoreCatalog } from '../contexts/StoreCatalogContext.jsx'
+
+function array(value) { return Array.isArray(value) ? value : [] }
 
 export default function WorkerDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { catalog } = useStoreCatalog()
   const [worker, setWorker] = useState(null)
   const [permissions, setPermissions] = useState([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    axios.get(`/api/workers/${id}`).then(res => {
-      setWorker(res.data)
-      setPermissions(res.data.WorkerPermissions || [])
-    })
+    let cancelled = false
+    api.get(`/api/workers/${id}`)
+      .then((response) => {
+        if (cancelled) return
+        setWorker(response.data)
+        setPermissions(response.data.WorkerPermissions || [])
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError.response?.data?.error || 'Unable to load digital employee.')
+      })
+    return () => { cancelled = true }
   }, [id])
 
-  if (!worker) return <div className="p-8 text-orca-black dark:text-white">Loading...</div>
+  if (error) return <main className="orca-detail-shell"><div className="orca-error-state">{error}</div></main>
+  if (!worker) return <main className="orca-detail-shell"><div className="orca-loading-state">Loading digital employee…</div></main>
+
+  const catalogEmployee = (catalog?.employees || []).find((employee) => employee.id === worker.id)
+  const resolvedWorker = catalogEmployee ? { ...worker, ...catalogEmployee } : worker
+  const profile = employeeProfile(resolvedWorker)
+  const pricing = employeePricing(resolvedWorker)
+  const systems = array(resolvedWorker.supported_systems)
+  const channels = array(resolvedWorker.supported_channels)
+  const evaluations = array(resolvedWorker.evaluation_options)
+  const teamRoles = array(resolvedWorker.team_roles)
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="bg-orca-deep-blue rounded-2xl h-48 flex items-center justify-center text-white text-4xl font-bold relative">
-        {worker.hero_banner_url ? <img src={worker.hero_banner_url} alt={worker.name} className="w-full h-full object-cover rounded-2xl" /> : worker.name}
-        <div className="absolute bottom-4 left-4 flex items-center gap-3">
-          <span className="text-6xl">{worker.icon_url || '🤖'}</span>
-          <div>
-            <h1 className="text-2xl font-bold text-white">{worker.name}</h1>
-            <p className="text-sm text-white/80">ORCA Studios</p>
+    <>
+      <main className="orca-detail-shell">
+        <Link className="orca-back-link" to="/store/employees">← Back to digital employees</Link>
+        <section className="orca-detail-hero">
+          <div className="orca-detail-hero__avatar"><DigitalEmployeeAvatar name={profile.displayName} variant={profile.avatarVariant} src={avatarSource(resolvedWorker)} /></div>
+          <div className="orca-detail-hero__content">
+            <span className="orca-section-eyebrow">{resolvedWorker.publisher_name || resolvedWorker.developer_name || 'ORCA Studios'} · {resolvedWorker.readiness_state || 'defined'} · {resolvedWorker.evidence_status === 'verified' ? 'verified evidence' : 'evidence pending'}</span>
+            <h1>{profile.displayName}</h1>
+            <h2>{profile.roleTitle}</h2>
+            <p>{resolvedWorker.description}</p>
+            <div className="orca-work-mode-row">{profile.workModes.map((mode) => <span key={mode}>{normalizeMode(mode)}</span>)}</div>
+            <div className="orca-detail-hero__actions">
+              <button type="button" className="orca-button orca-button--primary" onClick={() => navigate(`/interview/${resolvedWorker.id}`)}>Interview</button>
+              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/sample/${resolvedWorker.id}`)}>Assign sample work</button>
+              <button type="button" className="orca-button orca-button--ghost" onClick={() => navigate(`/purchase/${resolvedWorker.id}`)}>Select plan</button>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="flex items-center gap-4 mt-4">
-        <div className="flex items-center">
-          <StarIcon className="h-5 w-5 text-yellow-400" />
-          <span className="font-bold ml-1 text-orca-black dark:text-white">{worker.avg_rating}</span>
-          <span className="text-orca-steel dark:text-gray-400 ml-1">({worker.total_reviews} reviews)</span>
-        </div>
-        <span className="font-bold text-orca-black dark:text-white">From ${worker.base_price}/mo</span>
-        <span className="text-sm bg-orca-mist dark:bg-blue-900/20 text-orca-slate dark:text-blue-300 px-3 py-1 rounded-full">{worker.category}</span>
-      </div>
+        <section className="orca-profile-grid">
+          <article>
+            <h3>Professional profile</h3>
+            <dl>
+              <div><dt>Department</dt><dd>{profile.department}</dd></div>
+              <div><dt>Career level</dt><dd>{profile.careerLevel}</dd></div>
+              <div><dt>Experience</dt><dd>{profile.experience}</dd></div>
+              <div><dt>Availability</dt><dd>{resolvedWorker.availability || '24/7/365'}</dd></div>
+              <div><dt>Publisher</dt><dd>{resolvedWorker.publisher_name || resolvedWorker.developer_name || 'ORCA Studios'}{resolvedWorker.publisher_type === 'third_party' ? ' (third-party)' : ' (first-party)'}</dd></div>
+              <div><dt>Protection</dt><dd>{resolvedWorker.protect_level || 'ORCA Protect Standard'}</dd></div>
+            </dl>
+            <div className="orca-candidate-card__skills">{profile.skills.map((skill) => <span key={skill}>{skill}</span>)}</div>
+          </article>
+          <article>
+            <h3>Human collaboration</h3>
+            <p>{resolvedWorker.support_summary || 'Supports human teams and provides role coverage.'}</p>
+            <strong>Oversight</strong>
+            <p>{resolvedWorker.human_oversight || 'A customer-assigned human manager owns policy, approvals, escalation, and final decisions.'}</p>
+            <strong>Execution limits</strong>
+            <p>{resolvedWorker.execution_limits || 'Customer-approved scope, resources, permissions, and policies apply.'}</p>
+          </article>
+          <article>
+            <h3>Launch pricing</h3>
+            {pricing.orca_monthly_price > 0 ? <><p>Regular human salary benchmark: <strong>{currency(pricing.regular_salary_monthly)}/month</strong></p><p>ORCA launch rate: <strong>{currency(pricing.orca_monthly_price)}/month</strong></p><p>Approximate salary savings: <strong>{currency(pricing.monthly_salary_savings)}/month</strong></p>{Number(resolvedWorker.activation_fee || 0) > 0 ? <p>Activation fee: <strong>{currency(Number(resolvedWorker.activation_fee))}</strong></p> : null}</> : <p>A verified salary benchmark is required before purchase.</p>}
+            <strong>Included workload</strong>
+            <p>{resolvedWorker.included_workload || 'Finalized during role scoping.'}</p>
+            {resolvedWorker.overage_pricing ? <><strong>Overage policy</strong><p>{resolvedWorker.overage_pricing}</p></> : null}
+          </article>
+          <article>
+            <h3>Systems and channels</h3>
+            <p><strong>Systems:</strong> {systems.length ? systems.join(' · ') : 'Selected during connection setup.'}</p>
+            <p><strong>Channels:</strong> {channels.length ? channels.join(' · ') : 'Selected during deployment.'}</p>
+            <p><strong>Included integrations:</strong> {Number(resolvedWorker.integrations_included || 0) || 'Scoped during onboarding'}</p>
+          </article>
+          <article>
+            <h3>Evaluation before deployment</h3>
+            <p>{resolvedWorker.evidence_status === 'verified' ? 'Verified evaluation evidence is available for this digital employee.' : 'Public evaluation evidence has not yet been marked verified. Interview and sample-work flows remain available before purchase.'}</p>
+            <div className="orca-candidate-card__skills">{evaluations.map((option) => <span key={option}>{option}</span>)}</div>
+          </article>
+          {teamRoles.length ? <article><h3>Team composition</h3><p>This product is a coordinated multi-employee workforce.</p><div className="orca-candidate-card__skills">{teamRoles.map((role) => <span key={role}>{role}</span>)}</div></article> : null}
+        </section>
 
-      <button className="w-full mt-4 bg-orca-deep-blue hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-3 rounded-full transition text-lg">
-        Deploy to Slack
-      </button>
-
-      <div className="mt-6">
-        <h3 className="font-bold text-lg text-orca-black dark:text-white">This worker requires access to:</h3>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {permissions.map(p => (
-            <span key={p.id} className="bg-gray-100 dark:bg-gray-800 text-orca-black dark:text-white px-3 py-1 rounded-full text-sm border border-gray-200 dark:border-gray-700">
-              {p.tool.toUpperCase()}: {p.scope} {p.is_required ? '⚠️' : ''}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <h3 className="font-bold text-lg text-orca-black dark:text-white">About this worker</h3>
-        <p className="text-orca-steel dark:text-gray-400 mt-1">{worker.description}</p>
-        <p className="text-sm text-orca-steel dark:text-gray-400 mt-2">Version {worker.version} – {worker.release_notes}</p>
-      </div>
-    </div>
+        <section className="orca-permissions-section">
+          <h2>Capabilities and permissions</h2>
+          <p>Permissions map to the customer’s connected platforms and are limited to approved resources.</p>
+          <div className="orca-permission-list">
+            {permissions.map((permission) => <article key={permission.id}><div><strong>{permission.name}</strong><span>{permission.is_required ? 'Required' : 'Optional'} · {permission.risk_level} risk</span></div><p>{permission.description}</p>{permission.requires_human_approval ? <small>Human approval required before execution.</small> : null}</article>)}
+          </div>
+        </section>
+      </main>
+      <OrcaFooter navigation={catalog?.navigation || []} />
+    </>
   )
 }
