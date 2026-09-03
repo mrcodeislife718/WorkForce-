@@ -12,6 +12,7 @@ const migrateCompleteFlowSchema = require('./migrations/completeFlowMigration');
 const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
 const migrateMarketControlPlaneSchema = require('./migrations/marketControlPlaneMigration');
 const migratePremiumCatalogMetadata = require('./migrations/premiumCatalogMetadataMigration');
+const { createRateLimiter, requestSecurity, validateProductionEnvironment } = require('./security/productionBoundary');
 
 const connectorRoutes = require('./routes/connectors');
 const connectionRoutes = require('./routes/connections');
@@ -27,12 +28,20 @@ const { router: billingRoutes, webhook: billingWebhook } = require('./routes/bil
 const { router: storeCatalogRoutes } = require('./routes/storeCatalog');
 const { startRuntimeWorker, stopRuntimeWorker } = require('./runtime/JobRunner');
 
+validateProductionEnvironment();
+
 const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+const authRateLimiter = createRateLimiter({
+  windowMs: process.env.AUTH_RATE_LIMIT_WINDOW_MS || 60_000,
+  max: process.env.AUTH_RATE_LIMIT_MAX || 20,
+});
 
+app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
+app.use(requestSecurity);
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
@@ -40,12 +49,6 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  next();
-});
 
 app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), billingWebhook);
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
@@ -64,7 +67,7 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authRateLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
@@ -84,7 +87,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
@@ -203,9 +206,9 @@ app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/console', consoleRoutes);
 app.use('/api/control-plane', controlPlaneRoutes);
 
-app.use((error, _req, res, _next) => {
-  console.error(error);
-  return res.status(500).json({ error: 'ORCA encountered an unexpected error.' });
+app.use((error, req, res, _next) => {
+  console.error({ requestId: req.requestId, error });
+  return res.status(500).json({ error: 'ORCA encountered an unexpected error.', requestId: req.requestId });
 });
 
 async function prepareDatabase() {
@@ -226,6 +229,7 @@ async function start() {
   await prepareDatabase();
   startRuntimeWorker();
   const port = Number(process.env.PORT || 5000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid PORT: ${port}`);
   const server = app.listen(port, () => console.log(`ORCA backend running on port ${port}`));
   const shutdown = async () => {
     stopRuntimeWorker();
