@@ -2,9 +2,12 @@
 
 const express = require('express');
 const sequelize = require('../config/database');
+const { Op } = require('sequelize');
+const { randomUUID } = require('node:crypto');
+const { hasEntitlement } = require('../services/billingService');
 const auth = require('../middleware/auth');
 const {
-  Deployment, RuntimeJob, TaskRun, OutcomeVerification, DeploymentEvent,
+  Deployment, Worker, RuntimeJob, TaskRun, OutcomeVerification, DeploymentEvent,
 } = require('../models');
 const { parseCustomerReview } = require('../services/customerReview');
 
@@ -49,7 +52,14 @@ router.post('/jobs/:id', async (req, res) => {
       return res.status(409).json({ error: 'Only delivered work can be reviewed.' });
     }
 
-    const review = await sequelize.transaction(async (transaction) => {
+    const employee = await Worker.findByPk(job.Deployment.worker_id);
+    const entitlement = employee ? await hasEntitlement(req.user.id, employee) : { entitled: false };
+    const allowCorrection = decision.status === 'rejected'
+      && job.Deployment.status === 'active'
+      && !job.Deployment.runtime_configuration?.quarantined
+      && entitlement.entitled;
+
+    const completed = await sequelize.transaction(async (transaction) => {
       const task = await TaskRun.findOne({
         where: { id: job.payload.task_run_id, deployment_id: job.deployment_id, status: 'completed' },
         transaction,
@@ -90,10 +100,40 @@ router.post('/jobs/:id', async (req, res) => {
           : 'Customer requested corrections to delivered work.',
         metadata: { task_run_id: task.id, runtime_job_id: job.id, review_id: outcome.id },
       }, { transaction });
-      return outcome;
+      let correctionJobId = null;
+      if (allowCorrection) {
+        // Locking the completed TaskRun above serializes review-and-requeue
+        // against concurrent duplicate customer requests.
+        const existingCorrection = await RuntimeJob.findOne({
+          where: {
+            deployment_id: job.deployment_id,
+            job_type: 'deployment_task',
+            payload: { [Op.contains]: { correction_of_job_id: job.id } },
+          },
+          transaction,
+        });
+        const repair = existingCorrection || await RuntimeJob.create({
+          deployment_id: job.deployment_id,
+          job_type: 'deployment_task',
+          status: 'queued',
+          run_after: new Date(),
+          max_attempts: Number(process.env.RUNTIME_TASK_MAX_ATTEMPTS || 5),
+          payload: {
+            trace_id: randomUUID(),
+            title: `Revision: ${String(job.payload?.title || 'Customer deliverable').slice(0, 230)}`,
+            instructions: String(job.payload?.instructions || ''),
+            priority: Number(job.payload?.priority || 50),
+            trigger_type: 'customer_requested_revision',
+            correction_of_job_id: job.id,
+            customer_feedback: decision.feedback,
+          },
+        }, { transaction });
+        correctionJobId = repair.id;
+      }
+      return { review: outcome, correction_job_id: correctionJobId };
     });
 
-    return res.json({ review });
+    return res.json(completed);
   } catch (error) {
     if (error.message === 'Completed task record was not found.') {
       return res.status(409).json({ error: error.message });
