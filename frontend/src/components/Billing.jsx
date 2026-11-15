@@ -3,21 +3,46 @@ import api from '../api/client'
 
 export default function Billing() {
   const [subscriptions, setSubscriptions] = useState([])
+  const [purchases, setPurchases] = useState([])
+  const [portalBusy, setPortalBusy] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/api/billing/subscriptions')
-      .then((response) => setSubscriptions(response.data.subscriptions || []))
-      .catch((requestError) => setError(requestError.response?.data?.error || 'Unable to load subscriptions.'))
+    Promise.all([
+      api.get('/api/billing/subscriptions'),
+      api.get('/api/billing/purchases'),
+    ])
+      .then(([subscriptionsResponse, purchasesResponse]) => {
+        setSubscriptions(subscriptionsResponse.data.subscriptions || [])
+        setPurchases(purchasesResponse.data.purchases || [])
+      })
+      .catch((requestError) => setError(requestError.response?.data?.error || 'Unable to load billing history.'))
       .finally(() => setLoading(false))
   }, [])
+
+  const openPortal = async () => {
+    setPortalBusy(true)
+    setError('')
+    try {
+      const response = await api.post('/api/billing/portal')
+      if (!response.data.url) throw new Error('Billing management link was not returned.')
+      window.location.assign(response.data.url)
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || requestError.message || 'Unable to open billing management.')
+      setPortalBusy(false)
+    }
+  }
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">ORCA Billing</h1>
-        <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Real Stripe subscription status for your digital employees.</p>
+        <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Confirmed subscriptions, one-time licenses and secure payment management.</p>
+        <button type="button" disabled={portalBusy || (subscriptions.length === 0 && purchases.length === 0)}
+          onClick={openPortal} className="mt-4 rounded-lg bg-orca-deep-blue px-4 py-2 text-white font-bold disabled:opacity-50">
+          {portalBusy ? 'Opening…' : 'Manage billing securely'}
+        </button>
       </div>
       {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 p-3 text-red-700 dark:text-red-300">{error}</div>}
 
@@ -26,7 +51,7 @@ export default function Billing() {
       ) : subscriptions.length === 0 ? (
         <section className="rounded-2xl border p-8 text-center" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
           <h2 className="text-xl font-bold">No subscriptions yet</h2>
-          <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Interview a digital employee, review its sample work, then complete checkout from its hiring flow.</p>
+          <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Browse a digital employee, choose its listed plan, and complete secure checkout.</p>
         </section>
       ) : (
         <section className="space-y-4">
@@ -65,6 +90,31 @@ export default function Billing() {
           ))}
         </section>
       )}
+      <section className="mt-8 space-y-4">
+        <h2 className="text-xl font-bold">One-time licenses</h2>
+        {purchases.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No one-time purchases on this account.</p>
+        ) : purchases.map((purchase) => (
+          <article key={purchase.id} className="rounded-2xl border p-5"
+            style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+            <div className="flex justify-between gap-3">
+              <div>
+                <h3 className="font-bold">{purchase.Worker?.name || 'Digital employee'}</h3>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {purchase.purchased_at ? new Date(purchase.purchased_at).toLocaleDateString() : 'Payment confirmation pending'}
+                </p>
+              </div>
+              <span className="font-semibold">{purchase.status.replaceAll('_', ' ')}</span>
+            </div>
+            <p className="mt-3 font-bold">
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: purchase.currency.toUpperCase() }).format(purchase.amount_cents / 100)}
+            </p>
+            {purchase.status === 'refunded' || purchase.status === 'disputed'
+              ? <p className="mt-2 text-sm text-amber-700">Access is suspended until billing is resolved.</p>
+              : null}
+          </article>
+        ))}
+      </section>
     </main>
   )
 }
