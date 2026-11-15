@@ -8,17 +8,23 @@ function positiveNumber(value) {
 function calculateLaunchPricing(worker = {}) {
   const annualHumanSalary = positiveNumber(worker.regular_salary_annual);
   const monthlyHumanSalary = annualHumanSalary > 0 ? annualHumanSalary / 12 : 0;
-  const monthlyPrice = monthlyHumanSalary > 0
-    ? Math.round(monthlyHumanSalary * (ORCA_LAUNCH_RATE_PERCENT / 100))
-    : 0;
+  const listedPrice = positiveNumber(worker.base_price);
+  const monthlyPrice = worker.price_model === 'one_time' || worker.price_model === 'free'
+    ? 0
+    : listedPrice;
+  const listedPercent = monthlyHumanSalary && monthlyPrice
+    ? Number(((monthlyPrice / monthlyHumanSalary) * 100).toFixed(2))
+    : null;
 
   return {
-    launch_rate_percent: ORCA_LAUNCH_RATE_PERCENT,
-    customer_savings_percent: 100 - ORCA_LAUNCH_RATE_PERCENT,
+    launch_rate_percent: listedPercent,
+    customer_savings_percent: listedPercent === null ? null : Number((100 - listedPercent).toFixed(2)),
     regular_salary_annual: annualHumanSalary > 0 ? Math.round(annualHumanSalary) : 0,
     regular_salary_monthly: monthlyHumanSalary > 0 ? Math.round(monthlyHumanSalary) : 0,
     orca_monthly_price: monthlyPrice,
-    monthly_salary_savings: monthlyHumanSalary > 0 ? Math.round(monthlyHumanSalary - monthlyPrice) : 0,
+    monthly_salary_savings: monthlyHumanSalary > 0 && monthlyPrice > 0
+      ? Number((monthlyHumanSalary - monthlyPrice).toFixed(2))
+      : null,
   };
 }
 
