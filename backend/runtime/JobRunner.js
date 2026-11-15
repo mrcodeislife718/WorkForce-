@@ -16,9 +16,11 @@ const {
   TaskRun,
   ApprovalRequest,
   DeploymentEvent,
+  CapabilityExecution,
 } = require('../models');
 const { generateJson, generateText } = require('../services/modelProvider');
 const { verifiedLessonsForDeployment } = require('../services/experienceMemory');
+const { recoveryDisposition } = require('./recoveryPolicy');
 const { execute: executeCapability } = require('./CapabilityBroker');
 const registry = require('../connectors/registerBuiltins')();
 const { loadSecrets } = require('../services/connectionService');
@@ -62,6 +64,79 @@ async function claimJob() {
     }, { transaction });
     return job;
   });
+}
+
+async function recoverStalledJobs() {
+  const configured = Number(process.env.RUNTIME_STALE_LOCK_MS || 900000);
+  if (!Number.isSafeInteger(configured) || configured < 120000) {
+    throw new Error('RUNTIME_STALE_LOCK_MS must be at least 120000.');
+  }
+  const cutoff = new Date(Date.now() - configured);
+  const stalled = await RuntimeJob.findAll({
+    where: { status: 'running', locked_at: { [Op.lt]: cutoff } },
+    order: [['locked_at', 'ASC']],
+    limit: 100,
+  });
+
+  for (const job of stalled) {
+    const taskId = job.payload?.task_run_id;
+    const executions = taskId
+      ? await CapabilityExecution.findAll({
+          where: { task_run_id: taskId },
+          attributes: ['id', 'status'],
+        })
+      : [];
+    const safe = recoveryDisposition(job, executions) === 'retry';
+    const canRetry = safe && job.attempt_count < job.max_attempts;
+    const failureReason = !safe
+      ? 'The last external action may have taken effect before the interruption. Reconciliation is required before retrying.'
+      : 'The assignment exhausted its retry allowance.';
+    const [changed] = await RuntimeJob.update(
+      canRetry ? {
+        status: 'queued',
+        run_after: new Date(),
+        locked_at: null,
+        locked_by: null,
+        last_error: 'Recovered after interrupted execution.',
+      } : {
+        status: 'failed',
+        completed_at: new Date(),
+        locked_at: null,
+        locked_by: null,
+        last_error: failureReason,
+      },
+      { where: { id: job.id, status: 'running', locked_at: { [Op.lt]: cutoff } } },
+    );
+    if (!changed) continue;
+    if (!canRetry && job.sample_assignment_id) {
+      await SampleAssignment.update({
+        status: 'failed', failure_reason: failureReason, completed_at: new Date(),
+      }, { where: { id: job.sample_assignment_id } });
+    }
+    if (!canRetry && taskId) {
+      await TaskRun.update({
+        status: 'failed', failure_reason: failureReason, completed_at: new Date(),
+      }, { where: { id: taskId, status: 'running' } });
+    }
+    if (job.deployment_id) {
+      if (!safe) {
+        await Deployment.update(
+          { status: 'paused', paused_at: new Date() },
+          { where: { id: job.deployment_id, status: 'active' } },
+        );
+      }
+      await DeploymentEvent.create({
+        deployment_id: job.deployment_id,
+        event_type: canRetry ? 'runtime.interruption_recovered' : 'runtime.interruption_requires_review',
+        severity: canRetry ? 'info' : 'critical',
+        message: canRetry
+          ? 'Interrupted work returned to the queue from saved progress.'
+          : failureReason,
+        metadata: { runtime_job_id: job.id, task_run_id: taskId || null },
+      });
+    }
+  }
+  return stalled.length;
 }
 
 function sampleSystemPrompt(worker, interview) {
@@ -532,8 +607,12 @@ function startRuntimeWorker() {
   const healthInterval = Number(process.env.HEALTH_CHECK_INTERVAL_MS || 300000);
   timer = setInterval(tick, interval);
   timer.unref?.();
-  healthTimer = setInterval(() => scheduleHealthChecks().catch((error) => console.error('Health scheduling failed:', error)), healthInterval);
+  healthTimer = setInterval(() => {
+    scheduleHealthChecks().catch((error) => console.error('Health scheduling failed:', error));
+    recoverStalledJobs().catch((error) => console.error('Interrupted work recovery failed:', error));
+  }, healthInterval);
   healthTimer.unref?.();
+  recoverStalledJobs().catch((error) => console.error('Initial interruption recovery failed:', error));
   tick();
   scheduleHealthChecks().catch((error) => console.error('Initial health scheduling failed:', error));
 }
@@ -548,6 +627,7 @@ function stopRuntimeWorker() {
 
 module.exports = {
   claimJob,
+  recoverStalledJobs,
   processOne,
   scheduleHealthChecks,
   startRuntimeWorker,
