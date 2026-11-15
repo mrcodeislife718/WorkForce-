@@ -92,7 +92,7 @@ export default function DeploymentWizard() {
     event.preventDefault()
     setError('')
     if (!eligibility?.eligible) {
-      setError('Interview, sample work, and purchase must all be complete before deployment.')
+      setError((eligibility.blockers || []).map((item) => item.message).join(' ') || 'Complete deployment requirements.')
       return
     }
     const missingRequired = requirements.filter((requirement) => {
