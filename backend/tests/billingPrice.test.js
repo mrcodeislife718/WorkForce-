@@ -2,29 +2,31 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { assertStripePriceMatches } = require('../services/billingService');
 
-test('published monthly price must exactly match Stripe price', () => {
-  const worker = { base_price: '29.99', price_model: 'subscription' };
-  const price = {
-    active: true, currency: 'usd', unit_amount: 2999,
-    type: 'recurring', recurring: { interval: 'month', interval_count: 1 },
-  };
-  assert.doesNotThrow(() => assertStripePriceMatches(worker, price));
-  assert.throws(() => assertStripePriceMatches(worker, { ...price, unit_amount: 3000 }), /does not match/);
+const monthly = {
+  active: true, currency: 'usd', unit_amount: 280000,
+  type: 'recurring', recurring: { interval: 'month', interval_count: 1 },
+};
+
+test('premium published monthly price must exactly match Stripe price', () => {
+  const worker = { base_price: '2800.00', price_model: 'subscription' };
+  assert.doesNotThrow(() => assertStripePriceMatches(worker, monthly));
+  assert.throws(() => assertStripePriceMatches(worker, { ...monthly, unit_amount: 280001 }), /does not match/);
 });
 
-test('one-time licenses cannot accidentally use recurring prices', () => {
-  const worker = { base_price: '50.00', price_model: 'one_time' };
-  const price = { active: true, currency: 'usd', unit_amount: 5000, type: 'one_time' };
-  assert.doesNotThrow(() => assertStripePriceMatches(worker, price));
-  assert.throws(() => assertStripePriceMatches(worker, { ...price, type: 'recurring' }), /one-time/);
+test('new Workforce employee hires cannot use one-time or free Stripe pricing', () => {
+  const worker = { base_price: '2800.00', price_model: 'one_time' };
+  assert.throws(() => assertStripePriceMatches(worker, monthly), /monthly subscriptions/);
+  assert.throws(() => assertStripePriceMatches({ ...worker, price_model: 'free' }, monthly), /monthly subscriptions/);
+  assert.throws(() => assertStripePriceMatches({ ...worker, price_model: 'subscription' }, {
+    active: true, currency: 'usd', unit_amount: 280000, type: 'one_time',
+  }), /matching monthly Stripe price/);
 });
 
-test('inactive provider prices and incorrect currencies are rejected', () => {
-  const worker = { base_price: '50.00', price_model: 'one_time' };
+test('annual, inactive, incorrectly priced, and non-USD prices are rejected', () => {
+  const worker = { base_price: '2800.00', price_model: 'subscription' };
   assert.throws(() => assertStripePriceMatches(worker, {
-    active: false, currency: 'usd', unit_amount: 5000, type: 'one_time',
-  }), /does not match/);
-  assert.throws(() => assertStripePriceMatches(worker, {
-    active: true, currency: 'eur', unit_amount: 5000, type: 'one_time',
-  }), /does not match/);
+    ...monthly, recurring: { interval: 'year', interval_count: 1 },
+  }), /matching monthly/);
+  assert.throws(() => assertStripePriceMatches(worker, { ...monthly, active: false }), /does not match/);
+  assert.throws(() => assertStripePriceMatches(worker, { ...monthly, currency: 'eur' }), /does not match/);
 });
