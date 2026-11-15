@@ -6,7 +6,13 @@ const {
   InterviewSession,
   SampleAssignment,
   Subscription,
+  Purchase,
 } = require('../models');
+const {
+  persistOneTimeCheckout,
+  markOneTimePaymentFailed,
+  reflectStripeCharge,
+} = require('./oneTimePurchaseService');
 
 const PRICE_ENV_BY_WORKER = {
   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa': 'STRIPE_PRICE_CUSTOMER_SUPPORT',
@@ -46,6 +52,13 @@ async function activeSubscription(userId, workerId) {
 
 async function hasEntitlement(userId, worker) {
   if (worker.price_model === 'free') return { entitled: true, reason: 'free' };
+  if (worker.price_model === 'one_time') {
+    const purchase = await Purchase.findOne({
+      where: { user_id: userId, worker_id: worker.id, status: { [Op.in]: ['paid', 'partially_refunded'] } },
+      order: [['purchased_at', 'DESC']],
+    });
+    return { entitled: Boolean(purchase), reason: purchase ? 'one_time_purchase' : 'purchase_required', purchase };
+  }
   const subscription = await activeSubscription(userId, worker.id);
   return { entitled: Boolean(subscription), reason: subscription ? subscription.status : 'subscription_required', subscription };
 }
@@ -64,29 +77,57 @@ async function assertPurchaseEligibility(userId, workerId) {
   return { interview, sample };
 }
 
+function assertStripePriceMatches(worker, price) {
+  const amountCents = Math.round(Number(worker.base_price) * 100);
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    throw new Error('Digital employee has no valid purchase price.');
+  }
+  if (!price?.active || price.currency !== 'usd' || price.unit_amount !== amountCents) {
+    throw new Error('The payment provider price does not match the advertised USD price.');
+  }
+  if (worker.price_model === 'subscription') {
+    if (price.type !== 'recurring' || price.recurring?.interval !== 'month'
+      || Number(price.recurring?.interval_count) !== 1) {
+      throw new Error('This subscription must have a matching monthly Stripe price.');
+    }
+  } else if (worker.price_model === 'one_time' && price.type !== 'one_time') {
+    throw new Error('This purchase must have a one-time Stripe price.');
+  }
+}
+
 async function createCheckoutSession(userId, workerId) {
   const worker = await Worker.findOne({ where: { id: workerId, status: 'published' } });
   if (!worker) throw new Error('Digital employee was not found.');
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   if (worker.price_model === 'free') {
-    return { free: true, url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/deploy/${worker.id}` };
+    return { free: true, url: `${frontendUrl}/deploy/${worker.id}` };
   }
-  if (worker.price_model !== 'subscription') throw new Error('This purchase model is not configured for checkout yet.');
+  if (!['subscription', 'one_time'].includes(worker.price_model)) {
+    throw new Error('Unsupported purchase model.');
+  }
   const priceId = stripePriceId(worker);
   if (!priceId) throw new Error('This digital employee does not have a real Stripe price configured.');
-  await assertPurchaseEligibility(userId, workerId);
 
-  const existing = await activeSubscription(userId, workerId);
-  if (existing) {
-    return { already_entitled: true, url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/deploy/${worker.id}` };
-  }
+  const entitlement = await hasEntitlement(userId, worker);
+  if (entitlement.entitled) return { already_entitled: true, url: `${frontendUrl}/deploy/${worker.id}` };
+
+  const stripe = stripeClient();
+  const price = await stripe.prices.retrieve(priceId);
+  assertStripePriceMatches(worker, price);
 
   const user = await User.findByPk(userId);
-  const previous = await Subscription.findOne({
-    where: { user_id: userId, provider: 'stripe', provider_customer_id: { [Op.ne]: null } },
-    order: [['createdAt', 'DESC']],
-  });
-  const stripe = stripeClient();
-  let customerId = previous?.provider_customer_id;
+  if (!user) throw new Error('Account was not found.');
+  const [subscription, previousPurchase] = await Promise.all([
+    Subscription.findOne({
+      where: { user_id: userId, provider: 'stripe', provider_customer_id: { [Op.ne]: null } },
+      order: [['createdAt', 'DESC']],
+    }),
+    Purchase.findOne({
+      where: { user_id: userId, provider_customer_id: { [Op.ne]: null } },
+      order: [['createdAt', 'DESC']],
+    }),
+  ]);
+  let customerId = subscription?.provider_customer_id || previousPurchase?.provider_customer_id;
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: user.email,
@@ -95,28 +136,47 @@ async function createCheckoutSession(userId, workerId) {
     });
     customerId = customer.id;
   }
-
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const metadata = { orca_user_id: user.id, orca_worker_id: worker.id };
+  const mode = worker.price_model === 'subscription' ? 'subscription' : 'payment';
   const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
+    mode,
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${frontendUrl}/purchase/success?worker_id=${worker.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/worker/${worker.id}`,
     allow_promotion_codes: true,
-    metadata: { orca_user_id: user.id, orca_worker_id: worker.id },
-    subscription_data: { metadata: { orca_user_id: user.id, orca_worker_id: worker.id } },
+    metadata,
+    ...(mode === 'subscription'
+      ? { subscription_data: { metadata } }
+      : { payment_intent_data: { metadata } }),
   });
+  if (!session.url) throw new Error('The payment provider did not create a checkout URL.');
 
-  await Subscription.create({
-    user_id: user.id,
-    worker_id: worker.id,
-    provider: 'stripe',
-    provider_customer_id: customerId,
-    provider_price_id: priceId,
-    status: 'pending',
-    metadata: { checkout_session_id: session.id },
-  });
+  if (mode === 'subscription') {
+    await Subscription.create({
+      user_id: user.id,
+      worker_id: worker.id,
+      provider: 'stripe',
+      provider_customer_id: customerId,
+      provider_price_id: priceId,
+      status: 'pending',
+      metadata: { checkout_session_id: session.id },
+    });
+  } else {
+    await Purchase.findOrCreate({
+      where: { provider_session_id: session.id },
+      defaults: {
+        user_id: user.id,
+        worker_id: worker.id,
+        provider_session_id: session.id,
+        provider_customer_id: customerId,
+        provider_price_id: priceId,
+        amount_cents: Number(price.unit_amount),
+        currency: price.currency,
+        status: 'pending',
+      },
+    });
+  }
   return { id: session.id, url: session.url };
 }
 
@@ -161,13 +221,24 @@ async function handleStripeEvent(event) {
   const stripe = stripeClient();
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    if (session.mode === 'subscription' && session.subscription) {
+    if (session.mode === 'payment') {
+      await persistOneTimeCheckout(session);
+    } else if (session.mode === 'subscription' && session.subscription) {
       const subscription = await stripe.subscriptions.retrieve(session.subscription);
       await persistStripeSubscription(subscription, {
         user_id: session.metadata?.orca_user_id,
         worker_id: session.metadata?.orca_worker_id,
       });
     }
+  } else if (event.type === 'checkout.session.async_payment_succeeded') {
+    await persistOneTimeCheckout(event.data.object);
+  } else if (event.type === 'checkout.session.async_payment_failed') {
+    await markOneTimePaymentFailed(event.data.object);
+  } else if (event.type === 'charge.refunded') {
+    await reflectStripeCharge(event.data.object);
+  } else if (event.type === 'charge.dispute.created') {
+    const disputedCharge = await stripe.charges.retrieve(event.data.object.charge);
+    await reflectStripeCharge(disputedCharge, true);
   } else if (event.type.startsWith('customer.subscription.')) {
     await persistStripeSubscription(event.data.object);
   }
@@ -179,6 +250,7 @@ module.exports = {
   activeSubscription,
   hasEntitlement,
   assertPurchaseEligibility,
+  assertStripePriceMatches,
   createCheckoutSession,
   handleStripeEvent,
 };
