@@ -1,6 +1,6 @@
 const express = require('express');
 const auth = require('../middleware/auth');
-const { Worker, Subscription } = require('../models');
+const { Worker, Subscription, Purchase } = require('../models');
 const {
   stripeClient,
   stripePriceId,
@@ -48,6 +48,7 @@ router.get('/worker/:workerId/status', auth, async (req, res) => {
       entitled: entitlement.entitled,
       reason: entitlement.reason,
       subscription: entitlement.subscription || null,
+      purchase: entitlement.purchase || null,
     });
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load billing status.' });
@@ -64,6 +65,44 @@ router.get('/subscriptions', auth, async (req, res) => {
     return res.json({ subscriptions });
   } catch (error) {
     return res.status(500).json({ error: 'Unable to load subscriptions.' });
+  }
+});
+
+router.get('/purchases', auth, async (req, res) => {
+  try {
+    const purchases = await Purchase.findAll({
+      where: { user_id: req.user.id },
+      include: [Worker],
+      order: [['updatedAt', 'DESC']],
+    });
+    return res.json({ purchases });
+  } catch (_error) {
+    return res.status(500).json({ error: 'Unable to load purchases.' });
+  }
+});
+
+router.post('/portal', auth, async (req, res) => {
+  try {
+    const [subscription, purchase] = await Promise.all([
+      Subscription.findOne({
+        where: { user_id: req.user.id, provider: 'stripe' },
+        order: [['createdAt', 'DESC']],
+      }),
+      Purchase.findOne({
+        where: { user_id: req.user.id, provider: 'stripe' },
+        order: [['createdAt', 'DESC']],
+      }),
+    ]);
+    const customerId = subscription?.provider_customer_id || purchase?.provider_customer_id;
+    if (!customerId) return res.status(404).json({ error: 'No paid billing account is connected.' });
+    const url = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const session = await stripeClient().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${url}/billing`,
+    });
+    return res.json({ url: session.url });
+  } catch (_error) {
+    return res.status(503).json({ error: 'Billing management is unavailable. Check payment provider configuration.' });
   }
 });
 
