@@ -28,7 +28,7 @@ function extractText(data) {
   throw new Error('The model provider returned no text output.');
 }
 
-async function generateText({ system, messages, temperature = 0.2, maxTokens = 2000 }) {
+async function generateText({ system, messages, temperature = 0.2, maxTokens = 2000, responseFormat = null }) {
   const config = configuration();
   const startedAt = Date.now();
   const response = await axios.post(
@@ -37,6 +37,7 @@ async function generateText({ system, messages, temperature = 0.2, maxTokens = 2
       model: config.model,
       temperature,
       max_tokens: maxTokens,
+      ...(responseFormat ? { response_format: responseFormat } : {}),
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
         ...messages.map((message) => ({
@@ -69,7 +70,12 @@ async function generateText({ system, messages, temperature = 0.2, maxTokens = 2
 }
 
 async function generateJson(args) {
-  const result = await generateText(args);
+  const useJsonMode = process.env.MODEL_JSON_MODE === 'true'
+    || process.env.MODEL_PROVIDER === 'local-llama-cpp';
+  const result = await generateText({
+    ...args,
+    ...(useJsonMode ? { responseFormat: { type: 'json_object' } } : {}),
+  });
   const cleaned = result.text.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
   let value;
   try {
