@@ -13,7 +13,10 @@ const WorkspaceResource = sequelize.define('WorkspaceResource', {
   last_discovered_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW, allowNull: false },
 }, {
   indexes: [
-    { unique: true, fields: ['workspace_connection_id', 'external_id', 'resource_type'] },
+    // PostgreSQL silently truncates identifiers to 63 bytes. Explicitly use
+    // the existing truncated name so a repeated migration never attempts to
+    // create this same unique index twice.
+    { name: 'workspace_resources_workspace_connection_id_external_id_resourc', unique: true, fields: ['workspace_connection_id', 'external_id', 'resource_type'] },
     { fields: ['workspace_connection_id'] },
   ],
 });
