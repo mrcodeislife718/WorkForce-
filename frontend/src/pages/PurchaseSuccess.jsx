@@ -37,17 +37,17 @@ export default function PurchaseSuccess() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-16 text-center">
-      <h1 className="text-3xl font-bold">Subscription confirmation</h1>
-      {status === 'checking' && <p className="mt-4">Waiting for Stripe’s signed webhook confirmation…</p>}
+      <h1 className="text-3xl font-bold">Purchase confirmation</h1>
+      {status === 'checking' && <p className="mt-4">Waiting for secure payment confirmation…</p>}
       {status === 'confirmed' && (
         <>
-          <p className="mt-4 text-green-700 dark:text-green-300">Your subscription is active. ORCA can now continue to workspace selection and permissions.</p>
+          <p className="mt-4 text-green-700 dark:text-green-300">Your purchase has been confirmed. ORCA can now continue to workspace selection and permissions.</p>
           <Link to={`/deploy/${workerId}`} className="inline-flex mt-6 rounded-lg bg-orca-deep-blue text-white font-bold px-5 py-3">Continue to deployment</Link>
         </>
       )}
       {status === 'pending' && (
         <>
-          <p className="mt-4 text-amber-700 dark:text-amber-300">Payment returned successfully, but ORCA has not yet received the signed Stripe webhook. Deployment remains blocked until confirmation arrives.</p>
+          <p className="mt-4 text-amber-700 dark:text-amber-300">Checkout returned successfully, but the signed payment confirmation has not arrived. Deployment remains blocked until confirmation arrives.</p>
           <button onClick={() => window.location.reload()} className="mt-6 rounded-lg border font-bold px-5 py-3" style={{ borderColor: 'var(--border-color)' }}>Check again</button>
         </>
       )}
