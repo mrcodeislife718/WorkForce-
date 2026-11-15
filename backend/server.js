@@ -13,6 +13,7 @@ const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
 const migrateMarketControlPlaneSchema = require('./migrations/marketControlPlaneMigration');
 const migratePremiumCatalogMetadata = require('./migrations/premiumCatalogMetadataMigration');
 const migratePurchases = require('./migrations/purchaseMigration');
+const migrateSupport = require('./migrations/supportMigration');
 const { createRateLimiter, requestSecurity, validateProductionEnvironment } = require('./security/productionBoundary');
 
 const connectorRoutes = require('./routes/connectors');
@@ -25,6 +26,7 @@ const consoleRoutes = require('./routes/console');
 const runtimeRoutes = require('./routes/runtime');
 const customerReviewRoutes = require('./routes/customerReviews');
 const economicsRoutes = require('./routes/economics');
+const supportRoutes = require('./routes/support');
 const approvalRoutes = require('./routes/approvals');
 const controlPlaneRoutes = require('./routes/controlPlane');
 const { router: billingRoutes, webhook: billingWebhook } = require('./routes/billing');
@@ -206,6 +208,7 @@ app.use('/api/deployments', deploymentRoutes);
 app.use('/api/runtime', runtimeRoutes);
 app.use('/api/reviews', customerReviewRoutes);
 app.use('/api/economics', economicsRoutes);
+app.use('/api/support', supportRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/console', consoleRoutes);
@@ -225,6 +228,7 @@ async function prepareDatabase() {
     await migrateMarketControlPlaneSchema();
   }
   await migratePurchases();
+  await migrateSupport();
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
   if (syncMode === 'alter') await sequelize.sync({ alter: true });
   else if (syncMode === 'create') await sequelize.sync();
