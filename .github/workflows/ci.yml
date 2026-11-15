@@ -56,7 +56,7 @@ jobs:
       - run: npm run seed
       - name: Verify real PostgreSQL + Express employee customer flow
         run: |
-          node server.js > /tmp/workforce-http-smoke.log 2>&1 &
+          DB_SYNC_MODE=none RUN_LEGACY_MIGRATIONS=false node server.js > /tmp/workforce-http-smoke.log 2>&1 &
           backend_pid=$!
           trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
           node ../scripts/smoke-workforce.mjs || { cat /tmp/workforce-http-smoke.log; exit 1; }
