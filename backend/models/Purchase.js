@@ -13,7 +13,8 @@ const Purchase = sequelize.define('Purchase', {
   amount_cents: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   currency: { type: DataTypes.STRING(8), allowNull: false, defaultValue: 'usd' },
   status: {
-    type: DataTypes.ENUM('pending', 'paid', 'partially_refunded', 'refunded', 'failed', 'disputed'),
+    type: DataTypes.STRING(32),
+    validate: { isIn: [['pending', 'paid', 'partially_refunded', 'refunded', 'failed', 'disputed']] },
     allowNull: false,
     defaultValue: 'pending',
   },
