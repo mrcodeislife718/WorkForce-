@@ -67,30 +67,49 @@ async function deploymentCostUsd(deploymentId) {
   return totalCost({ deployment_id: deploymentId });
 }
 
-async function verifyDeterministicOutcome({ deploymentId, taskRunId, traceId = null, actionResults = [], expectedActionCount = null }) {
-  const successful = actionResults.filter((item) => item?.status === 'succeeded').length;
+function classifyDeliveryProof({ actionResults = [], expectedActionCount = null, deliverable = '' }) {
   const expected = expectedActionCount === null ? actionResults.length : Number(expectedActionCount);
-  const complete = expected === successful && expected > 0;
-  const zeroActionComplete = expected === 0 && successful === 0;
-  const verified = complete || zeroActionComplete;
-  const score = expected === 0 ? 1 : successful / Math.max(expected, 1);
+  const successful = actionResults.filter((item) => item?.status === 'succeeded').length;
+  const hasDeliverable = typeof deliverable === 'string' && deliverable.trim().length >= 10;
+  const valid = Number.isInteger(expected) && expected >= 0 && successful === expected;
+  // Action receipts show execution; only a customer or independent checker can validate the business outcome.
+  const delivered = valid && (expected > 0 || hasDeliverable);
+  return {
+    status: delivered ? 'inconclusive' : 'rejected',
+    score: expected > 0 ? successful / expected : hasDeliverable ? 1 : 0,
+    successful,
+    expected,
+    hasDeliverable,
+  };
+}
+
+async function verifyDeterministicOutcome({
+  deploymentId, taskRunId, traceId = null, actionResults = [],
+  expectedActionCount = null, deliverable = '',
+}) {
+  const proof = classifyDeliveryProof({ actionResults, expectedActionCount, deliverable });
   return OutcomeVerification.create({
     deployment_id: deploymentId,
     task_run_id: taskRunId,
     trace_id: traceId,
     verifier_type: 'deterministic',
-    status: verified ? 'verified' : 'rejected',
-    score,
+    status: proof.status,
+    score: proof.score,
     criteria: {
-      expected_action_count: expected,
+      expected_action_count: proof.expected,
       require_all_actions_succeeded: true,
+      customer_acceptance_required: true,
+      verification_scope: 'execution_receipts_not_business_outcome',
     },
     evidence: {
-      successful_action_count: successful,
+      successful_action_count: proof.successful,
       action_results: actionResults,
+      deliverable_present: proof.hasDeliverable,
     },
-    failure_reason: verified ? null : `Only ${successful} of ${expected} expected actions succeeded.`,
-    verified_at: new Date(),
+    failure_reason: proof.status === 'rejected'
+      ? 'Expected actions were not completed, or no meaningful deliverable was provided.'
+      : null,
+    verified_at: proof.status === 'rejected' ? new Date() : null,
   });
 }
 
@@ -100,4 +119,5 @@ module.exports = {
   taskCostUsd,
   deploymentCostUsd,
   verifyDeterministicOutcome,
+  classifyDeliveryProof,
 };
