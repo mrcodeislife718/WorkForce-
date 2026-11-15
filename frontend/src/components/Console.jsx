@@ -27,6 +27,7 @@ export default function Console() {
   const [economics, setEconomics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [actionId, setActionId] = useState(null)
   const [taskDeploymentId, setTaskDeploymentId] = useState(null)
   const [task, setTask] = useState({ title: '', instructions: '', priority: 50 })
@@ -112,11 +113,18 @@ export default function Console() {
     setError('')
     try {
       const draft = reviewDrafts[job.id] || {}
-      await api.post(`/api/reviews/jobs/${job.id}`, {
+      const response = await api.post(`/api/reviews/jobs/${job.id}`, {
         decision,
         feedback: draft.feedback || '',
         minutes_saved: draft.minutes_saved === '' || draft.minutes_saved == null ? null : Number(draft.minutes_saved),
       })
+      if (response.data.correction_job_id) {
+        setNotice('Corrections assigned automatically. Your employee is revising the written work without repeating external actions.')
+      } else if (decision === 'accepted') {
+        setNotice('Work accepted. Your verified feedback will inform this employee’s future assignments.')
+      } else {
+        setNotice('Corrections recorded. The subscription or deployment must be active before additional work can run.')
+      }
       await load(false)
     } catch (requestError) {
       setError(requestError.response?.data?.error || 'Unable to save your feedback.')
@@ -140,6 +148,7 @@ export default function Console() {
       </div>
 
       {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 p-3">{error}</div>}
+      {notice && <div className="mb-5 rounded-lg border p-3 text-sm" role="status" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>{notice}</div>}
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         <MetricCard label="Active digital employees" value={metrics.active_deployments || 0} detail={`${metrics.deployment_count || 0} total deployments`} />
