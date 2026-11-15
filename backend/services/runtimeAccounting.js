@@ -73,7 +73,9 @@ function classifyDeliveryProof({ actionResults = [], expectedActionCount = null,
   const hasDeliverable = typeof deliverable === 'string' && deliverable.trim().length >= 10;
   const valid = Number.isInteger(expected) && expected >= 0 && successful === expected;
   // Action receipts show execution; only a customer or independent checker can validate the business outcome.
-  const delivered = valid && (expected > 0 || hasDeliverable);
+  // Action receipts are not customer-facing completed work. Every job must
+  // produce a substantive deliverable before requesting customer review.
+  const delivered = valid && hasDeliverable;
   return {
     status: delivered ? 'inconclusive' : 'rejected',
     score: expected > 0 ? successful / expected : hasDeliverable ? 1 : 0,
