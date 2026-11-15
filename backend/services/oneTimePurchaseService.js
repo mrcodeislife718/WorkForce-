@@ -55,6 +55,7 @@ async function reflectStripeCharge(charge, disputed = false) {
     where: { provider_payment_intent_id: String(charge.payment_intent) },
   });
   if (!purchase) return null;
+  if (purchase.status === 'disputed' && !disputed) return purchase;
   const fullyRefunded = Number(charge.amount || 0) > 0
     && Number(charge.amount_refunded || 0) >= Number(charge.amount);
   const next = disputed ? 'disputed' : fullyRefunded ? 'refunded' : 'partially_refunded';
