@@ -24,6 +24,7 @@ export default function Console() {
     recent_tasks: [],
     recent_events: [],
   })
+  const [economics, setEconomics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionId, setActionId] = useState(null)
@@ -34,8 +35,12 @@ export default function Console() {
   const load = async (showLoading = false) => {
     if (showLoading) setLoading(true)
     try {
-      const response = await api.get('/api/console/overview')
+      const [response, economicsResponse] = await Promise.all([
+        api.get('/api/console/overview'),
+        api.get('/api/economics/mine'),
+      ])
       setOverview(response.data)
+      setEconomics(economicsResponse.data)
       setError('')
     } catch (requestError) {
       setError(requestError.response?.data?.error || 'Unable to load ORCA Console.')
@@ -150,6 +155,27 @@ export default function Console() {
         <MetricCard label="Records updated" value={metrics.records_updated || 0} />
         <MetricCard label="Records deleted" value={metrics.records_deleted || 0} />
       </section>
+
+      {economics && (
+        <section className="mb-8">
+          <h2 className="text-xl font-bold mb-3">Measured customer results and costs</h2>
+          <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+            Real records only. Customer-reported time savings are not independently timed, and execution costs may be estimates.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <MetricCard label="Customer-accepted work" value={economics.customer_accepted_tasks} />
+            <MetricCard label="Work needing correction" value={economics.customer_rejected_tasks} />
+            <MetricCard label="Customer acceptance rate" value={
+              economics.customer_acceptance_rate === null ? 'Not measured yet' : percent(economics.customer_acceptance_rate)
+            } />
+            <MetricCard label="Customer-reported time saved" value={`${economics.customer_reported_minutes_saved} minutes`} />
+            <MetricCard label="Recorded execution costs" value={`${Number(economics.recorded_employee_execution_cost_usd).toFixed(2)}`} />
+            <MetricCard label="Confirmed one-time payments" value={`${Number(economics.confirmed_one_time_customer_spend_usd).toFixed(2)}`} />
+            <MetricCard label="Active subscriptions" value={economics.active_subscriptions} />
+            <MetricCard label="Work delivered for review" value={economics.delivered_tasks} />
+          </div>
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-3">Actions requiring your approval</h2>
