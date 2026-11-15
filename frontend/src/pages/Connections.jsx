@@ -3,12 +3,25 @@ import api from '../api/client'
 
 const restOperationsExample = JSON.stringify({
   health: { method: 'GET', path: '/health' },
-  discover_resources: { method: 'GET', path: '/orca/resources' },
-  install: { method: 'POST', path: '/orca/digital-employees/install' },
-  pause: { method: 'POST', path: '/orca/digital-employees/pause' },
-  resume: { method: 'POST', path: '/orca/digital-employees/resume' },
-  uninstall: { method: 'POST', path: '/orca/digital-employees/uninstall' },
+  'tickets.read': { method: 'GET', path: '/tickets' },
 }, null, 2)
+
+// Uses the customer's existing GitHub account and a repository-scoped token.
+// The backend encrypts the token and verifies actual repository access.
+function githubIssueOperations(owner, repo) {
+  const fixed_path_params = { owner, repo }
+  const issuesPath = '/repos/{owner}/{repo}/issues'
+  return {
+    health: { method: 'GET', path: '/user' },
+    verify: { method: 'GET', path: issuesPath, fixed_path_params, fixed_query: { per_page: 1 } },
+    'issues.read': { method: 'GET', path: issuesPath, fixed_path_params, fixed_query: { per_page: 30 }, description: 'Read existing repository issues' },
+    'issues.create': {
+      method: 'POST', path: issuesPath, fixed_path_params,
+      description: 'Create a repository issue, subject to customer approval',
+      example_input: { body: { title: 'Clear issue title', body: 'Reproducible observations, impact and requested next steps' } },
+    },
+  }
+}
 
 export default function Connections() {
   const [catalog, setCatalog] = useState([])
@@ -25,6 +38,7 @@ export default function Connections() {
     basic_username: '',
     basic_password: '',
     webhook_secret: '',
+    github_repository: '',
     operations_json: restOperationsExample,
   })
   const [error, setError] = useState('')
@@ -47,6 +61,26 @@ export default function Connections() {
   }, [])
 
   const update = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }))
+
+  const useGitHubIssues = () => {
+    const parts = form.github_repository.trim().split('/')
+    if (parts.length !== 2 || parts.some((part) => !/^[A-Za-z0-9_.-]{1,100}$/.test(part))) {
+      setError('Enter the exact GitHub repository as owner/repository.')
+      return
+    }
+    const [owner, repo] = parts
+    setSelectedKey('generic-rest')
+    setError('')
+    setForm((current) => ({
+      ...current,
+      workspace_name: current.workspace_name || `GitHub ${owner}/${repo}`,
+      base_url: 'https://api.github.com',
+      allowed_hosts: 'api.github.com',
+      capabilities: 'issues.read, issues.create',
+      auth_type: 'bearer_token',
+      operations_json: JSON.stringify(githubIssueOperations(owner, repo), null, 2),
+    }))
+  }
 
   const submit = async (event) => {
     event.preventDefault()
@@ -195,6 +229,16 @@ export default function Connections() {
                   ) : form.auth_type !== 'none' ? (
                     <input className="w-full rounded-lg border px-3 py-2" type="password" value={form.credential} onChange={update('credential')} placeholder="Credential" required />
                   ) : null}
+                  <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--border-color)' }}>
+                    <p className="font-semibold text-sm">Use an existing GitHub repository</p>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      Configure real issue reading and approved issue creation without a new service account. Enter a narrowly scoped token below.
+                    </p>
+                    <input className="w-full rounded-lg border px-3 py-2" value={form.github_repository} onChange={update('github_repository')} placeholder="owner/repository" />
+                    <button type="button" onClick={useGitHubIssues} className="rounded-lg border px-3 py-2 text-sm font-semibold">
+                      Configure GitHub Issues operations
+                    </button>
+                  </div>
                   <label className="block">
                     <span className="block text-sm font-semibold mb-1">Real API operations</span>
                     <textarea className="w-full rounded-lg border px-3 py-2 font-mono text-sm" rows={13} value={form.operations_json} onChange={update('operations_json')} required />
