@@ -32,9 +32,20 @@ function validateUniversalConfiguration(definition, configuration, secrets) {
 
   if (definition.adapter_key === 'generic-rest') {
     if (!configuration?.base_url) throw new Error('base_url is required.');
-    for (const lifecycleOperation of ['health', 'install', 'pause', 'resume', 'update', 'uninstall']) {
-      if (!configuration?.operations?.[lifecycleOperation]) {
-        throw new Error(`A real ${lifecycleOperation} operation is required.`);
+    // Standard third-party APIs do not implement ORCA's install/pause/uninstall
+    // protocol. Direct API connections are operated entirely from Workforce.
+    // The configured health endpoint must still be verified against the provider.
+    if (!configuration?.operations?.health) {
+      throw new Error('A real health operation is required to verify this API connection.');
+    }
+    if (configuration.lifecycle_mode && !['direct', 'managed'].includes(configuration.lifecycle_mode)) {
+      throw new Error('Unsupported REST lifecycle mode.');
+    }
+    if (configuration.lifecycle_mode === 'managed') {
+      for (const key of ['install', 'pause', 'resume', 'update', 'uninstall']) {
+        if (!configuration.operations[key]) {
+          throw new Error(`Managed lifecycle operation ${key} is required.`);
+        }
       }
     }
     for (const capability of capabilities) {
