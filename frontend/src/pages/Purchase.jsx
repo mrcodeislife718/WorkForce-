@@ -35,7 +35,7 @@ export default function Purchase() {
     <main className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold">Hire this digital employee</h1>
       <p className="mt-2 mb-6" style={{ color: 'var(--text-secondary)' }}>
-        Complete the real subscription before connecting workspaces and granting access.
+        Choose the listed purchase option. After secure payment is confirmed, choose the employee’s workspace and permissions.
       </p>
       {error && <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950/40 p-3 text-red-700 dark:text-red-300">{error}</div>}
       <section className="rounded-2xl border p-6" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
@@ -45,10 +45,10 @@ export default function Purchase() {
           <>
             <div className="flex justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold">24/7/365 digital employee subscription</h2>
-                <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>The deployment remains blocked until Stripe confirms an active or trialing subscription.</p>
+                <h2 className="text-xl font-bold">{status.price_model === 'one_time' ? 'One-time digital employee license' : status.price_model === 'free' ? 'Free digital employee' : 'Monthly digital employee subscription'}</h2>
+                <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>The employee is activated only after purchase confirmation and your workspace approval.</p>
               </div>
-              <p className="text-xl font-bold">${status.base_price}/mo</p>
+              <p className="text-xl font-bold"></p>
             </div>
             {!status.stripe_price_configured && status.price_model !== 'free' && (
               <p className="mt-4 text-amber-700 dark:text-amber-300">A real Stripe price must be configured by ORCA before checkout can begin.</p>
@@ -58,7 +58,7 @@ export default function Purchase() {
               disabled={busy || (!status.stripe_price_configured && status.price_model !== 'free')}
               className="mt-6 w-full rounded-lg bg-orca-deep-blue text-white font-bold py-3 disabled:opacity-50"
             >
-              {busy ? 'Opening secure checkout…' : status.price_model === 'free' ? 'Continue to deployment' : 'Subscribe with Stripe'}
+              {busy ? 'Opening secure checkout…' : status.price_model === 'free' ? 'Continue to deployment' : status.price_model === 'one_time' ? 'Buy securely' : 'Subscribe securely'}
             </button>
           </>
         )}
