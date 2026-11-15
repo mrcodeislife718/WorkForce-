@@ -28,9 +28,17 @@ async function latestCheckpoint(runtimeJobId) {
   });
 }
 
+function shouldRestoreCheckpoint(runtimeJob, checkpoint) {
+  if (!checkpoint || !runtimeJob.payload) return false;
+  const savedIndex = Number(checkpoint.next_action_index || 0);
+  const recordedIndex = Number(runtimeJob.payload.next_action_index || 0);
+  // Never undo action progress already recorded in the job itself.
+  return savedIndex >= recordedIndex;
+}
+
 async function restoreCheckpoint(runtimeJob) {
   const checkpoint = await latestCheckpoint(runtimeJob.id);
-  if (!checkpoint || !runtimeJob.payload) return null;
+  if (!shouldRestoreCheckpoint(runtimeJob, checkpoint)) return null;
   const state = checkpoint.state || {};
   await runtimeJob.update({
     payload: {
@@ -50,4 +58,4 @@ async function markTerminal(runtimeJobId) {
   return checkpoint;
 }
 
-module.exports = { writeCheckpoint, latestCheckpoint, restoreCheckpoint, markTerminal };
+module.exports = { writeCheckpoint, latestCheckpoint, restoreCheckpoint, markTerminal, shouldRestoreCheckpoint };
