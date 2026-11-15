@@ -32,7 +32,14 @@ router.get('/mine', auth, async (req, res) => {
         attributes: ['status', 'amount_cents', 'metadata'],
       }),
       Subscription.count({
-        where: { user_id: req.user.id, status: { [Op.in]: ['active', 'trialing'] } },
+        where: {
+          user_id: req.user.id,
+          status: { [Op.in]: ['active', 'trialing'] },
+          [Op.or]: [
+            { current_period_end: null },
+            { current_period_end: { [Op.gt]: new Date() } },
+          ],
+        },
       }),
     ]);
     return res.json(summarizeCustomerEconomics({
