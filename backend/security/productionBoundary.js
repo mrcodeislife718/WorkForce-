@@ -6,16 +6,37 @@ function parsePositiveInteger(value, fallback, name) {
   return parsed;
 }
 
+function parseProductionHttpsOrigin(value, name) {
+  let url;
+  try { url = new URL(String(value || '')); } catch {
+    throw new Error(name + ' must be an explicit HTTPS origin.');
+  }
+  if (url.protocol !== 'https:' || !url.hostname || ['localhost', '127.0.0.1'].includes(url.hostname)
+    || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+    throw new Error(name + ' must be an explicit non-local HTTPS origin without paths or credentials.');
+  }
+  return url.origin;
+}
+
 function validateProductionEnvironment(env = process.env) {
   if (env.NODE_ENV !== 'production') return;
-  const required = ['JWT_SECRET', 'CORS_ORIGINS'];
-  for (const key of required) {
-    if (!String(env[key] || '').trim()) throw new Error(`${key} must be configured in production.`);
+  if (String(env.JWT_SECRET || '').length < 32) {
+    throw new Error('JWT_SECRET must contain at least 32 random characters in production.');
   }
-  const origins = String(env.CORS_ORIGINS).split(',').map((value) => value.trim()).filter(Boolean);
-  if (!origins.length || origins.some((origin) => origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-    throw new Error('CORS_ORIGINS must contain explicit non-local production origins.');
+  if (Buffer.from(String(env.ORCA_CREDENTIAL_ENCRYPTION_KEY || ''), 'base64').length !== 32) {
+    throw new Error('ORCA_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key in production.');
   }
+  if (env.DB_SSL !== 'true' || env.DB_SSL_REJECT_UNAUTHORIZED === 'false') {
+    throw new Error('Production database connections must use validated TLS (DB_SSL=true).');
+  }
+  if (!env.DATABASE_URL && ![env.DB_HOST, env.DB_USER, env.DB_NAME, env.DB_PASSWORD].every(Boolean)) {
+    throw new Error('A real PostgreSQL connection must be configured in production.');
+  }
+  parseProductionHttpsOrigin(env.FRONTEND_URL, 'FRONTEND_URL');
+  parseProductionHttpsOrigin(env.PUBLIC_API_URL, 'PUBLIC_API_URL');
+  const origins = String(env.CORS_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  if (!origins.length) throw new Error('CORS_ORIGINS must contain explicit non-local production origins.');
+  for (const origin of origins) parseProductionHttpsOrigin(origin, 'CORS_ORIGINS');
 }
 
 function createRateLimiter({ windowMs = 60_000, max = 30 } = {}) {
@@ -42,7 +63,7 @@ function createRateLimiter({ windowMs = 60_000, max = 30 } = {}) {
 
 function requestSecurity(req, res, next) {
   const supplied = req.get?.('x-request-id');
-  const requestId = typeof supplied === 'string' && supplied.length <= 128 ? supplied : randomUUID();
+  const requestId = typeof supplied === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(supplied) ? supplied : randomUUID();
   req.requestId = requestId;
   res.setHeader('X-Request-Id', requestId);
   res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
