@@ -31,6 +31,7 @@ export default function Navigation() {
           ))}
           <NavLink to="/console" className={({ isActive }) => isActive ? 'is-active' : ''}>For Creators</NavLink>
           {user ? <NavLink to="/connections" className={({ isActive }) => isActive ? 'is-active' : ''}>Connections</NavLink> : null}
+          {user ? <NavLink to="/support" className={({ isActive }) => isActive ? 'is-active' : ''}>Support</NavLink> : null}
         </nav>
         <div className="orca-navigation__actions">
           <button type="button" className="orca-icon-button" onClick={toggleTheme} aria-label="Toggle theme">{theme === 'light' ? '☾' : '☀'}</button>
@@ -43,6 +44,7 @@ export default function Navigation() {
           {links.map((item) => <Link key={item.key} to={item.href} onClick={() => setOpen(false)}>{item.label}</Link>)}
           <Link to="/console" onClick={() => setOpen(false)}>For Creators</Link>
           {user ? <Link to="/connections" onClick={() => setOpen(false)}>Connections</Link> : null}
+          {user ? <Link to="/support" onClick={() => setOpen(false)}>Support</Link> : null}
         </nav>
       ) : null}
     </header>
