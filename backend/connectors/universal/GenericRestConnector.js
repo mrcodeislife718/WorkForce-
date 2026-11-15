@@ -50,7 +50,13 @@ class GenericRestConnector extends ConnectorAdapter {
     if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(operationPath) || operationPath.includes('\\\\')) {
       throw new Error('REST operation paths must be relative to the approved API host.');
     }
-    const relativePath = interpolatePath(operationPath.replace(/^\/+/, ''), input.path_params || {});
+    // The customer config can bind immutable resource IDs (for example, a
+    // GitHub repository owner/name). The model cannot override these values.
+    const pathParams = {
+      ...(input.path_params || {}),
+      ...(operation.fixed_path_params || {}),
+    };
+    const relativePath = interpolatePath(operationPath.replace(/^\/+/, ''), pathParams);
     const url = new URL(relativePath, baseUrl).toString();
     await assertSafeUrl(url, configuration.allowed_hosts || []);
 
@@ -64,7 +70,7 @@ class GenericRestConnector extends ConnectorAdapter {
         ...(configuration.headers || {}),
         ...(operation.headers || {}),
       },
-      params: input.query || undefined,
+      params: { ...(input.query || {}), ...(operation.fixed_query || {}) },
       data: ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? input.body : undefined,
       timeout: Number(process.env.CONNECTOR_REQUEST_TIMEOUT_MS || 30000),
       maxContentLength: Number(process.env.CONNECTOR_MAX_RESPONSE_BYTES || 5242880),
@@ -95,6 +101,15 @@ class GenericRestConnector extends ConnectorAdapter {
       const operation = connection.configuration?.operations?.health;
       if (!operation) throw new Error('A real health operation must be configured.');
       const response = await this.request({ configuration: connection.configuration, secrets, operation });
+      // An optional read-only provider verification checks the actual resource
+      // that will receive future employee work, not merely token validity.
+      const verify = connection.configuration?.operations?.verify;
+      if (verify) {
+        if (String(verify.method || 'GET').toUpperCase() !== 'GET') {
+          throw new Error('Connection verification operation must be read-only GET.');
+        }
+        await this.request({ configuration: connection.configuration, secrets, operation: verify });
+      }
       return { ok: true, provider_response_status: response.status };
     } catch (error) {
       return { ok: false, error: this.normalizeError(error) };
