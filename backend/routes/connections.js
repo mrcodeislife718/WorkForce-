@@ -32,6 +32,31 @@ function validateUniversalConfiguration(definition, configuration, secrets) {
 
   if (definition.adapter_key === 'generic-rest') {
     if (!configuration?.base_url) throw new Error('base_url is required.');
+    let base;
+    try { base = new URL(configuration.base_url); } catch { throw new Error('A valid base API URL is required.'); }
+    if (base.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+      throw new Error('Production business API connections require HTTPS.');
+    }
+    if (!configuration.allowed_hosts.includes(base.hostname)) {
+      throw new Error('The API host must be explicitly listed under allowed hosts.');
+    }
+    const sensitiveHeader = /^(?:authorization|cookie|set-cookie|proxy-authorization|x-api-key|api-key|x-auth-token)$/i;
+    const headers = [
+      configuration.headers || {},
+      ...Object.values(configuration.operations || {}).map((operation) => operation?.headers || {}),
+    ];
+    for (const headerSet of headers) {
+      if (!headerSet || typeof headerSet !== 'object' || Array.isArray(headerSet)
+        || Object.keys(headerSet).some((key) => sensitiveHeader.test(key))) {
+        throw new Error('API credentials must be provided as encrypted secrets, never configuration headers.');
+      }
+    }
+    for (const name of ['health', 'verify', 'discover_resources']) {
+      const op = configuration.operations?.[name];
+      if (op && String(op.method || 'GET').toUpperCase() !== 'GET') {
+        throw new Error(`The ${name} probe must be read-only GET.`);
+      }
+    }
     // Standard third-party APIs do not implement ORCA's install/pause/uninstall
     // protocol. Direct API connections are operated entirely from Workforce.
     // The configured health endpoint must still be verified against the provider.
@@ -49,8 +74,16 @@ function validateUniversalConfiguration(definition, configuration, secrets) {
       }
     }
     for (const capability of capabilities) {
-      if (!configuration?.operations?.[capability]) {
+      const operation = configuration?.operations?.[capability];
+      if (!operation?.path) {
         throw new Error(`A real REST operation is required for capability ${capability}.`);
+      }
+      const method = String(operation.method || 'GET').toUpperCase();
+      if (capability.endsWith('.read') && method !== 'GET') {
+        throw new Error(`Read-only capability ${capability} must use GET.`);
+      }
+      if (method === 'DELETE' && !capability.endsWith('.delete')) {
+        throw new Error(`DELETE cannot be disguised as capability ${capability}.`);
       }
     }
     const authType = configuration.auth?.type;
@@ -207,3 +240,4 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.validateUniversalConfiguration = validateUniversalConfiguration;
