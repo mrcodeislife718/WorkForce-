@@ -145,7 +145,7 @@ export default function DeploymentWizard() {
     return (
       <main className="max-w-3xl mx-auto px-4 py-10">
         <h1 className="text-3xl font-bold">Finish the hiring steps first</h1>
-        <p className="mt-2 mb-6" style={{ color: 'var(--text-secondary)' }}>ORCA will not skip evaluation or billing and create a fake active deployment.</p>
+        <p className="mt-2 mb-6" style={{ color: 'var(--text-secondary)' }}>Finish the purchase requirement before assigning the employee permission to use business tools.</p>
         <div className="space-y-3">
           {eligibility.blockers.map((blocker) => (
             <Link key={blocker.code} to={linkFor(blocker)} className="block rounded-xl border p-4 font-semibold" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
@@ -160,10 +160,10 @@ export default function DeploymentWizard() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold">Deploy {worker?.name || 'digital employee'}</h1>
-      <p className="mt-1 mb-6" style={{ color: 'var(--text-secondary)' }}>Choose the real tools, accounts, and resources where this digital employee will work 24/7/365.</p>
+      <p className="mt-1 mb-6" style={{ color: 'var(--text-secondary)' }}>Choose an employee name and approve any outside tools it needs. Research and writing employees can work without external accounts.</p>
       {error && <div className="mb-5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 p-3">{error}</div>}
 
-      {connectionOptions.length === 0 ? (
+      {connectionOptions.length === 0 && requirements.length > 0 ? (
         <div className="rounded-2xl border p-6" style={{ borderColor: 'var(--border-color)' }}>
           <h2 className="text-xl font-bold">Connect the tools you use first</h2>
           <p className="mt-2 mb-4" style={{ color: 'var(--text-secondary)' }}>ORCA found no validated workspace connections for this account.</p>
@@ -180,6 +180,12 @@ export default function DeploymentWizard() {
 
           <section className="rounded-2xl border p-5" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
             <h2 className="text-xl font-bold mb-4">Capabilities and permissions</h2>
+            {requirements.length === 0 && (
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                This employee can produce written work without access to your outside accounts.
+                No business-system permissions will be granted.
+              </p>
+            )}
             <div className="space-y-4">
               {requirements.map((requirement) => {
                 const compatible = compatibleFor(requirement.capability_key)
@@ -240,7 +246,7 @@ export default function DeploymentWizard() {
 
           <section className="rounded-2xl border p-5" style={{ borderColor: 'var(--border-color)' }}>
             <h2 className="text-xl font-bold">Final deployment check</h2>
-            <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>ORCA will revalidate every real connection, install the digital employee through each selected adapter, issue a protected runtime credential, and mark it active only after every installation succeeds.</p>
+            <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Workforce will validate every selected permission and connection before activation. Employees without external permissions can begin writing and analysis immediately after activation, provided a real AI model is connected.</p>
             <button className="mt-4 w-full rounded-lg bg-orca-deep-blue text-white font-bold py-3 disabled:opacity-50" disabled={submitting}>
               {submitting ? 'Installing and validating…' : 'Deploy digital employee'}
             </button>
