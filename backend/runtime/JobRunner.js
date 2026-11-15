@@ -21,6 +21,7 @@ const {
 const { generateJson, generateText } = require('../services/modelProvider');
 const { verifiedLessonsForDeployment } = require('../services/experienceMemory');
 const { recoveryDisposition } = require('./recoveryPolicy');
+const { heartbeatIntervalMs, staleAfterMs, createJobHeartbeat } = require('./jobLease');
 const { publicActionEvidence, buildCompletionMessages } = require('../services/actionEvidence');
 const { execute: executeCapability } = require('./CapabilityBroker');
 const registry = require('../connectors/registerBuiltins')();
@@ -68,10 +69,7 @@ async function claimJob() {
 }
 
 async function recoverStalledJobs() {
-  const configured = Number(process.env.RUNTIME_STALE_LOCK_MS || 900000);
-  if (!Number.isSafeInteger(configured) || configured < 120000) {
-    throw new Error('RUNTIME_STALE_LOCK_MS must be at least 120000.');
-  }
+  const configured = staleAfterMs();
   const cutoff = new Date(Date.now() - configured);
   const stalled = await RuntimeJob.findAll({
     where: { status: 'running', locked_at: { [Op.lt]: cutoff } },
@@ -274,7 +272,7 @@ async function planDeploymentTask(job, deployment, taskRun) {
   return generated.value;
 }
 
-async function processDeploymentTask(job) {
+async function processDeploymentTask(job, assertLeaseOwned = async () => {}) {
   const deployment = await Deployment.findByPk(job.deployment_id, { include: [Worker] });
   if (!deployment) throw new Error('Deployment was not found.');
   if (deployment.status !== 'active') throw new Error('Deployment is not active.');
@@ -373,6 +371,9 @@ async function processDeploymentTask(job) {
     const currentTaskCost = await taskCostUsd(taskRun.id);
     const currentDeploymentCost = await deploymentCostUsd(deployment.id);
     const estimatedActionCost = Number(grant?.constraints?.estimated_action_cost_usd || 0);
+    // A second runtime may have recovered this task if this process lost its lease.
+    // Never issue a customer-visible external action without confirming ownership.
+    await assertLeaseOwned();
     const executed = await executeCapability({
       deploymentId: deployment.id,
       taskRunId: taskRun.id,
@@ -385,6 +386,9 @@ async function processDeploymentTask(job) {
         estimatedActionCostUsd: estimatedActionCost,
       },
     });
+    // If the lease disappeared while the call was in flight, stop here. The
+    // reconciliation policy will detect an execution not saved in job progress.
+    await assertLeaseOwned();
     await recordCapabilityCost({
       deploymentId: deployment.id,
       taskRunId: taskRun.id,
@@ -428,6 +432,7 @@ async function processDeploymentTask(job) {
     });
   }
 
+  await assertLeaseOwned();
   // The initial plan precedes tool execution. For real tool-based work, produce
   // the customer deliverable only after observing the returned provider data.
   // Persist it before verification so a safe recovery never repeats paid synthesis.
@@ -449,6 +454,7 @@ async function processDeploymentTask(job) {
       }),
       maxTokens: Number(process.env.RUNTIME_DELIVER_MAX_TOKENS || 3500),
     });
+    await assertLeaseOwned();
     finalDeliverable = completed.text;
     await recordModelCost({
       deploymentId: deployment.id,
@@ -481,6 +487,7 @@ async function processDeploymentTask(job) {
     });
   }
 
+  await assertLeaseOwned();
   const verification = await verifyDeterministicOutcome({
     deploymentId: deployment.id,
     taskRunId: taskRun.id,
@@ -638,13 +645,23 @@ async function failOrRetry(job, error) {
 async function processOne() {
   const job = await claimJob();
   if (!job) return false;
+  const lease = createJobHeartbeat({
+    model: RuntimeJob,
+    id: job.id,
+    workerId,
+    intervalMs: heartbeatIntervalMs(),
+    onError: (error) => console.error('ORCA job heartbeat failed:', error),
+  });
   try {
     if (job.job_type === 'sample_assignment') await processSample(job);
-    else if (job.job_type === 'deployment_task') await processDeploymentTask(job);
+    else if (job.job_type === 'deployment_task') await processDeploymentTask(job, lease.assertOwned);
     else if (job.job_type === 'health_check') await processHealthCheck(job);
     else throw new Error(`Unsupported runtime job type: ${job.job_type}`);
   } catch (error) {
-    await failOrRetry(job, error);
+    // Another worker now owns this job; it must decide how to reconcile.
+    if (error.code !== 'WORKFORCE_JOB_LEASE_LOST') await failOrRetry(job, error);
+  } finally {
+    await lease.stop();
   }
   return true;
 }
