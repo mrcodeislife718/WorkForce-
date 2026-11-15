@@ -16,6 +16,7 @@ const InterviewMessage = require('./InterviewMessage');
 const SampleAssignment = require('./SampleAssignment');
 const Subscription = require('./Subscription');
 const Purchase = require('./Purchase');
+const SupportTicket = require('./SupportTicket');
 const RuntimeJob = require('./RuntimeJob');
 const ApprovalRequest = require('./ApprovalRequest');
 const Review = require('./Review');
@@ -79,6 +80,8 @@ User.hasMany(Purchase, { foreignKey: 'user_id' });
 Purchase.belongsTo(User, { foreignKey: 'user_id' });
 Worker.hasMany(Purchase, { foreignKey: 'worker_id' });
 Purchase.belongsTo(Worker, { foreignKey: 'worker_id' });
+User.hasMany(SupportTicket, { foreignKey: 'user_id' });
+SupportTicket.belongsTo(User, { foreignKey: 'user_id' });
 
 User.hasMany(Deployment, { foreignKey: 'user_id' });
 Deployment.belongsTo(User, { foreignKey: 'user_id' });
@@ -155,6 +158,7 @@ module.exports = {
   SampleAssignment,
   Subscription,
   Purchase,
+  SupportTicket,
   Deployment,
   DeploymentConnection,
   DeploymentCapabilityGrant,
