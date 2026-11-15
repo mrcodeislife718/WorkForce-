@@ -192,6 +192,10 @@ async function processSample(job) {
 async function planDeploymentTask(job, deployment, taskRun) {
   const grants = await DeploymentCapabilityGrant.findAll({
     where: { deployment_id: deployment.id, approved: true },
+    include: [{
+      model: DeploymentConnection,
+      include: [{ model: WorkspaceConnection }],
+    }],
   });
   const permissions = await WorkerPermission.findAll({ where: { worker_id: deployment.worker_id } });
   const permissionByKey = new Map(permissions.map((permission) => [permission.capability_key, permission]));
@@ -202,6 +206,21 @@ async function planDeploymentTask(job, deployment, taskRun) {
       description: permission?.description || '',
       requires_human_approval: Boolean(permission?.requires_human_approval),
       constraints: grant.constraints || {},
+      // Operation contracts describe how a real connector expects input.
+      // Never expose auth settings, custom headers, or encrypted credentials
+      // to the model. Fixed resource parameters cannot be overridden.
+      operation_contract: (() => {
+        const op = grant.DeploymentConnection?.WorkspaceConnection?.configuration
+          ?.operations?.[grant.capability_key];
+        if (!op) return null;
+        return {
+          method: String(op.method || 'GET').toUpperCase(),
+          path: String(op.path || '').slice(0, 500),
+          description: String(op.description || '').slice(0, 800),
+          fixed_path_params: op.fixed_path_params || {},
+          example_input: op.example_input || {},
+        };
+      })(),
     };
   });
 
