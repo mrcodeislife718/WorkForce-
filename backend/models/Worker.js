@@ -43,7 +43,7 @@ const Worker = sequelize.define('Worker', {
   verified_money_made: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
   verified_money_saved: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
   description: { type: DataTypes.TEXT },
-  category: { type: DataTypes.ENUM('support','sales','admin','design','research'), allowNull: false },
+  category: { type: DataTypes.STRING(100), allowNull: false },
   hero_banner_url: { type: DataTypes.STRING },
   icon_url: { type: DataTypes.STRING },
   avg_rating: { type: DataTypes.FLOAT, defaultValue: 0 },
