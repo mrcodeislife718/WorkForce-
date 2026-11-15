@@ -81,7 +81,10 @@ async function hasEntitlement(userId, worker) {
     return { entitled: Boolean(purchase), reason: purchase ? 'one_time_purchase' : 'purchase_required', purchase };
   }
   const subscription = await activeSubscription(userId, worker.id);
-  return { entitled: Boolean(subscription), reason: subscription ? subscription.status : 'subscription_required', subscription };
+  if (subscription) return { entitled: true, reason: subscription.status, subscription };
+  const { activeBundleEntitlement } = require('./bundleBillingService');
+  const bundle = await activeBundleEntitlement(userId, worker.id);
+  return { entitled: Boolean(bundle), reason: bundle ? 'active_team_or_department_subscription' : 'subscription_required', subscription: bundle };
 }
 
 async function assertPurchaseEligibility(userId, workerId) {
@@ -242,10 +245,18 @@ async function handleStripeEvent(event) {
       await persistOneTimeCheckout(session);
     } else if (session.mode === 'subscription' && session.subscription) {
       const subscription = await stripe.subscriptions.retrieve(session.subscription);
-      await persistStripeSubscription(subscription, {
-        user_id: session.metadata?.orca_user_id,
-        worker_id: session.metadata?.orca_worker_id,
-      });
+      if (session.metadata?.orca_sale_type === 'bundle') {
+        const { persistStripeBundleSubscription } = require('./bundleBillingService');
+        await persistStripeBundleSubscription(subscription, {
+          user_id: session.metadata?.orca_user_id,
+          bundle_id: session.metadata?.orca_bundle_id,
+        });
+      } else {
+        await persistStripeSubscription(subscription, {
+          user_id: session.metadata?.orca_user_id,
+          worker_id: session.metadata?.orca_worker_id,
+        });
+      }
     }
   } else if (event.type === 'checkout.session.async_payment_succeeded') {
     await persistOneTimeCheckout(event.data.object);
@@ -257,7 +268,20 @@ async function handleStripeEvent(event) {
     const disputedCharge = await stripe.charges.retrieve(event.data.object.charge);
     await reflectStripeCharge(disputedCharge, true);
   } else if (event.type.startsWith('customer.subscription.')) {
-    await persistStripeSubscription(event.data.object);
+    const { BundleSubscription } = require('../models');
+    const { persistStripeBundleSubscription } = require('./bundleBillingService');
+    const id = event.data.object.id;
+    const existingBundle = await BundleSubscription.findOne({ where: { provider_subscription_id: id } });
+    if (existingBundle || event.data.object.metadata?.orca_sale_type === 'bundle') {
+      // Fetch current Stripe state instead of trusting out-of-order event snapshots.
+      const current = await stripe.subscriptions.retrieve(id, { expand: ['items.data.price'] });
+      await persistStripeBundleSubscription(current, {
+        user_id: existingBundle?.user_id,
+        bundle_id: existingBundle?.workforce_bundle_id,
+      });
+    } else {
+      await persistStripeSubscription(event.data.object);
+    }
   }
 }
 
