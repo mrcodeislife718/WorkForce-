@@ -11,7 +11,7 @@ async function verifiedLessonsForDeployment(deploymentId) {
     limit: 8,
   });
   return reviews
-    .map((review) => String(review.evidence?.feedback || '').trim())
+    .map((review) => String(review.evidence?.feedback || review.evidence?.work_summary || '').trim())
     .filter(Boolean)
     .map((feedback) => feedback.slice(0, 500));
 }
