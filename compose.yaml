@@ -44,6 +44,37 @@ services:
     networks:
       - workforce_private
 
+  # Optional: existing local GGUF model served by a private llama.cpp endpoint.
+  # No cloud inference account is required. Opt in with --profile local-ai.
+  model:
+    profiles: ["local-ai"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      LLAMA_API_KEY: ${MODEL_API_KEY:-local-dev-only}
+    command:
+      - "-m"
+      - "/models/employee.gguf"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "-c"
+      - "8192"
+      - "--alias"
+      - "workforce-local"
+      - "--no-webui"
+    volumes:
+      - type: bind
+        source: ${WORKFORCE_GGUF_PATH:-./models/MISSING.gguf}
+        target: /models/employee.gguf
+        read_only: true
+    # The model is reachable only from the private Workforce network.
+    networks:
+      - workforce_private
+
 volumes:
   workforce_postgres:
 
