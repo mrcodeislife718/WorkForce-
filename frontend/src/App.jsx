@@ -20,6 +20,8 @@ import Interview from './pages/Interview.jsx'
 import SampleWork from './pages/SampleWork.jsx'
 import Purchase from './pages/Purchase.jsx'
 import PurchaseSuccess from './pages/PurchaseSuccess.jsx'
+import PurchaseBundle from './pages/PurchaseBundle.jsx'
+import PurchaseBundleSuccess from './pages/PurchaseBundleSuccess.jsx'
 import Support from './pages/Support.jsx'
 import DeploymentWizard from './pages/DeploymentWizard.jsx'
 
@@ -48,6 +50,8 @@ function App() {
                 <Route path="/sample/:workerId" element={<ProtectedRoute><SampleWork /></ProtectedRoute>} />
                 <Route path="/purchase/:workerId" element={<ProtectedRoute><Purchase /></ProtectedRoute>} />
                 <Route path="/purchase/success" element={<ProtectedRoute><PurchaseSuccess /></ProtectedRoute>} />
+                <Route path="/purchase/bundle/:slug" element={<ProtectedRoute><PurchaseBundle /></ProtectedRoute>} />
+                <Route path="/purchase/bundle-success" element={<ProtectedRoute><PurchaseBundleSuccess /></ProtectedRoute>} />
                 <Route path="/deploy/:workerId" element={<ProtectedRoute><DeploymentWizard /></ProtectedRoute>} />
                 <Route path="/connections" element={<ProtectedRoute><Connections /></ProtectedRoute>} />
                 <Route path="/console" element={<ProtectedRoute><Console /></ProtectedRoute>} />
