@@ -6,6 +6,7 @@ test('completed actions await actual customer outcome review', () => {
   const result = classifyDeliveryProof({
     actionResults: [{ status: 'succeeded' }, { status: 'succeeded' }],
     expectedActionCount: 2,
+    deliverable: 'Two customer-authorized updates completed; awaiting your review.',
   });
   assert.equal(result.status, 'inconclusive');
   assert.equal(result.score, 1);
@@ -34,5 +35,13 @@ test('failed or missing external actions cannot be called complete', () => {
   assert.equal(classifyDeliveryProof({
     actionResults: [{ status: 'succeeded' }],
     expectedActionCount: 2,
+  }).status, 'rejected');
+});
+
+test('successful tool actions without a useful written deliverable are not complete', () => {
+  assert.equal(classifyDeliveryProof({
+    actionResults: [{ status: 'succeeded' }],
+    expectedActionCount: 1,
+    deliverable: '',
   }).status, 'rejected');
 });
