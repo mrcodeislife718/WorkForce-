@@ -12,6 +12,7 @@ const {
   DeploymentEvent,
   RuntimeJob,
   ApprovalRequest,
+  OutcomeVerification,
 } = require('../models');
 
 const router = express.Router();
@@ -70,8 +71,8 @@ router.get('/overview', auth, async (req, res) => {
     }
 
     const deploymentIds = deployments.map((deployment) => deployment.id);
-    const [taskRuns, executions, events, runtimeJobs, approvals] = deploymentIds.length === 0
-      ? [[], [], [], [], []]
+    const [taskRuns, executions, events, runtimeJobs, approvals, customerReviews] = deploymentIds.length === 0
+      ? [[], [], [], [], [], []]
       : await Promise.all([
           TaskRun.findAll({ where: { deployment_id: deploymentIds }, order: [['createdAt', 'DESC']], limit: 500 }),
           CapabilityExecution.findAll({ where: { deployment_id: deploymentIds }, order: [['createdAt', 'DESC']], limit: 1000 }),
@@ -82,6 +83,11 @@ router.get('/overview', auth, async (req, res) => {
             include: [{ model: Deployment, include: [Worker] }],
             order: [['requested_at', 'ASC']],
           }),
+          OutcomeVerification.findAll({
+            where: { deployment_id: deploymentIds, verifier_type: 'customer' },
+            order: [['verified_at', 'DESC']],
+            limit: 500,
+          }),
         ]);
 
     return res.json({
@@ -90,6 +96,7 @@ router.get('/overview', auth, async (req, res) => {
       pending_approvals: approvals,
       runtime_jobs: runtimeJobs,
       recent_tasks: taskRuns.slice(0, 100),
+      customer_reviews: customerReviews,
       recent_events: events,
     });
   } catch (error) {
