@@ -30,7 +30,9 @@ const overrides = {
   DB_PASSWORD: randomBytes(24).toString('hex'),
   JWT_SECRET: randomBytes(48).toString('hex'),
   ORCA_CREDENTIAL_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+  SEED_ADMIN_PASSWORD: randomBytes(24).toString('base64url'),
 };
+overrides.INTERNAL_OWNER_TEST_ACCESS = 'true';
 let result = template;
 for (const [key, value] of Object.entries(overrides)) {
   const pattern = new RegExp('^' + key + '=.*$', 'm');
@@ -40,6 +42,8 @@ for (const [key, value] of Object.entries(overrides)) {
 fs.writeFileSync('backend/.env', result, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
 console.log('Created private backend/.env with random local PostgreSQL and application secrets.');
 console.log('No Supabase account, cloud credentials, or paid service was used.');
+console.log('Local owner sign-in uses SEED_ADMIN_EMAIL from backend/.env (default dev@orca.com).');
+console.log('Reveal the generated password only on your own terminal: grep ^SEED_ADMIN_PASSWORD= backend/.env');
 NODE
 
 echo
