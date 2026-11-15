@@ -47,7 +47,7 @@ class GenericRestConnector extends ConnectorAdapter {
     const operationPath = String(operation.path);
     // Operations are configured paths inside an allowlisted API host, never
     // arbitrary model-produced destinations.
-    if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(operationPath) || operationPath.includes('\\\\')) {
+    if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(operationPath) || operationPath.includes(String.fromCharCode(92))) {
       throw new Error('REST operation paths must be relative to the approved API host.');
     }
     // The customer config can bind immutable resource IDs (for example, a
