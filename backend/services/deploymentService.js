@@ -41,8 +41,7 @@ async function assertDeploymentEligibility(userId, worker) {
   });
   const entitlement = await hasEntitlement(userId, worker);
   const blockers = [];
-  if (!interview) blockers.push({ code: 'INTERVIEW_REQUIRED', message: 'Complete the digital employee interview.' });
-  if (!sample) blockers.push({ code: 'SAMPLE_REVIEW_REQUIRED', message: 'Complete and review real sample work.' });
+  // Interviews and samples remain available, but purchase and permission review are the real deployment gates.
   if (!entitlement.entitled) blockers.push({ code: 'PURCHASE_REQUIRED', message: 'Purchase or subscribe to this digital employee.' });
   return { eligible: blockers.length === 0, blockers, interview, sample, entitlement };
 }
