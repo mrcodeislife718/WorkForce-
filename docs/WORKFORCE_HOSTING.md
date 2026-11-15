@@ -11,75 +11,64 @@ This document describes the existing ORCA/Workforce deployment, not a replacemen
 
 The Vercel frontend is not a persistent task host. It must not contain `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, or `ORCA_CREDENTIAL_ENCRYPTION_KEY`.
 
-## Database
+## Start with self-hosted PostgreSQL (no new account)
 
-Create a **new dedicated Workforce PostgreSQL database** under the owner-approved organization. Do not reuse unrelated existing projects without owner authorization.
+Supabase is **optional**, not required. The application already uses ordinary PostgreSQL through Sequelize and can run its database and API on the user's existing Linux machine. A dedicated Docker Compose stack (`compose.yaml`) provides:
 
-For Supabase: use the Connect panel's **Session pooler** URL when the backend host is IPv4-only. For IPv6-capable persistent hosts, the direct Postgres URL is also supported. Do not fabricate the pooler host or username. Supabase connection reference: https://supabase.com/docs/guides/database/connecting-to-postgres .
+- `postgres`: PostgreSQL 16 on a private container-only network, with records persisted in a named Docker volume;
+- `backend`: the actual Node/Express API **and persistent employee task worker**, reachable on **localhost only** at port 5000;
+- automatic restart after host reboot when Docker is running;
+- randomly generated, locally stored secrets; no cloud provider or new account.
 
-For the hosted backend, configure in its **private environment variables**, not its public source:
-
-```dotenv
-NODE_ENV=production
-PORT=5000
-DATABASE_URL=postgresql://REPLACE_FROM_DATABASE_CONNECT_PANEL
-DB_SSL=true
-DB_SSL_REJECT_UNAUTHORIZED=true
-DB_POOL_MAX=10
-DB_SYNC_MODE=none
-RUN_LEGACY_MIGRATIONS=false
-JWT_SECRET=REPLACE_WITH_A_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
-ORCA_CREDENTIAL_ENCRYPTION_KEY=REPLACE_WITH_A_32_BYTE_BASE64_KEY
-PUBLIC_API_URL=https://api.example.com
-FRONTEND_URL=https://workforce.example.com
-CORS_ORIGINS=https://workforce.example.com
-MODEL_PROVIDER=openai-compatible
-MODEL_API_BASE_URL=https://approved-model-provider.example.com/v1
-MODEL_API_KEY=REPLACE_WITH_PROVIDER_KEY
-MODEL_ID=REPLACE_WITH_APPROVED_REAL_MODEL
-RUNTIME_STALE_LOCK_MS=900000
-RUNTIME_HEARTBEAT_MS=30000
-RUNTIME_DELIVER_MAX_TOKENS=3500
-```
-
-Replace example hosts with the **actual** deployed endpoints. These are templates, **not verified endpoints**. Do not use `DB_SSL_REJECT_UNAUTHORIZED=false` to bypass certificate problems. Never configure database/admin keys in Vercel's `VITE_` variables.
-
-Before putting customer data into a managed database with a public Data API, ensure that the Sequelize tables in `public` are **not anonymously accessible**. Prefer a dedicated project with the Data API disabled or `public` removed from exposed schemas, and inspect grants/row-level-security settings. The application uses trusted backend PostgreSQL access, not Supabase browser-client data access.
-
-## Initialize and verify the database
-
-From the owner-approved running environment after the database exists and the private environment variables are configured:
+Run from the GitHub repository root on Linux Mint (Node.js 22 and Docker Engine + Docker Compose plugin must be installed):
 
 ```bash
-cd backend
-npm ci
-npm run migrate:universal
-npm run seed:data
-npm run check
-npm test
-```
-
-Run database migrations in a controlled release process, **not in a publicly accessible web request**. Confirm additive migration behavior on a backup before changing a live database. Make backups and verify restore procedures before customer onboarding.
-
-## Start employee API locally
-
-```bash
-cd backend
-npm ci
-npm start
-```
-
-The REST service uses `PORT` and exposes `/api/health`. The same process runs the persistent job poller with recovery and heartbeats. Production requires a host that does not sleep between requests.
-
-Container build and local verification:
-
-```bash
-docker build -t workforce-backend .
-docker run --rm --env-file backend/.env -p 5000:5000 workforce-backend
+git pull --ff-only origin main
+docker compose version
+bash scripts/setup-local-workforce.sh
+docker compose --env-file backend/.env build backend
+docker compose --env-file backend/.env up -d postgres
+docker compose --env-file backend/.env run --rm backend npm run seed
+docker compose --env-file backend/.env up -d backend
 curl -fsS http://localhost:5000/api/health
 ```
 
-This test requires a working PostgreSQL instance and correctly configured private env. Do not expose port 5000 directly to the Internet without HTTPS reverse proxy and firewall.
+On first launch, `scripts/setup-local-workforce.sh` creates `backend/.env` with **private cryptographically random** database, JWT, and connection-encryption secrets. It refuses to overwrite an existing `backend/.env`. The secrets are ignored by Git. If your existing env uses different values, edit it privately to match the intended new local database; don't commit it.
+
+```bash
+# Inspect application logs:
+docker compose --env-file backend/.env logs --tail 80 backend
+
+# Start the development website on your ThinkPad:
+cd frontend
+npm ci
+npm run dev
+# Open http://localhost:5173
+```
+
+The frontend's Vite dev proxy forwards `/api` requests to `http://localhost:5000`. The customer-facing Vercel website **cannot** reach the laptop's private `localhost`; this stack is for building and verifying the real product locally before choosing its 24/7 public hosting.
+
+To protect local records, run a backup (produces a sensitive file outside Git):
+
+```bash
+bash scripts/backup-local-workforce.sh
+```
+
+Keep a securely encrypted, off-device backup and rehearse a restore before accepting customer information. The named Docker volume survives `docker compose down`, but **`docker compose down --volumes` deletes the database**. Never use that destructive command on a database you need to keep.
+
+To stop only the local application without deleting records:
+
+```bash
+docker compose --env-file backend/.env down
+```
+
+### The eventual always-on commercial environment
+
+The same ordinary PostgreSQL and backend can later run on **one persistent, owner-approved server** (or reliable self-hosted hardware). This avoids separate application hosting and database-service accounts. That move still requires HTTPS reverse proxy, firewall, production-grade network boundaries, backups, restore testing, monitoring, uptime, customer isolation, and a real AI model accessible to the server. If the database is on a separate server, enable verified PostgreSQL TLS (`DB_SSL=true`). Do not expose its port publicly.
+
+For remote production configure `NODE_ENV=production`, strong private `JWT_SECRET`, `ORCA_CREDENTIAL_ENCRYPTION_KEY`, `PUBLIC_API_URL`, `FRONTEND_URL`, `CORS_ORIGINS`, `MODEL_API_BASE_URL`, `MODEL_API_KEY`, `MODEL_ID`, and separate Workforce Stripe test/live credentials as appropriate. Backend production checks deliberately reject missing secrets and insecure cross-origin endpoints.
+
+Do **not** publish a commercial frontend against the local-only backend. The Vercel Hobby plan must also be reviewed for commercial eligibility.
 
 ## Vercel frontend
 
