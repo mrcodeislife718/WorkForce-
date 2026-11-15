@@ -4,11 +4,38 @@ import api from '../api/client'
 export default function Billing() {
   const [subscriptions, setSubscriptions] = useState([])
   const [purchases, setPurchases] = useState([])
+  const [invoices, setInvoices] = useState([])
+  const [invoiceCustomers, setInvoiceCustomers] = useState([])
+  const [invoiceCustomer, setInvoiceCustomer] = useState('')
+  const [invoiceCursor, setInvoiceCursor] = useState(null)
+  const [invoiceBusy, setInvoiceBusy] = useState(false)
+  const [invoiceError, setInvoiceError] = useState('')
   const [portalBusy, setPortalBusy] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
+  const loadInvoices = async (customerId = '', cursor = null) => {
+    setInvoiceBusy(true)
+    setInvoiceError('')
+    try {
+      const params = {}
+      if (customerId) params.customer_id = customerId
+      if (cursor) params.after = cursor
+      const response = await api.get('/api/billing/invoices', { params })
+      const result = response.data
+      setInvoices((current) => cursor ? [...current, ...(result.invoices || [])] : (result.invoices || []))
+      setInvoiceCustomers(result.customer_ids || [])
+      setInvoiceCustomer(result.customer_id || '')
+      setInvoiceCursor(result.next_cursor || null)
+    } catch (requestError) {
+      setInvoiceError(requestError.response?.data?.error || 'Unable to retrieve invoice history.')
+    } finally {
+      setInvoiceBusy(false)
+    }
+  }
+
   useEffect(() => {
+    loadInvoices()
     Promise.all([
       api.get('/api/billing/subscriptions'),
       api.get('/api/billing/purchases'),
@@ -38,7 +65,7 @@ export default function Billing() {
     <main className="max-w-5xl mx-auto px-4 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">ORCA Billing</h1>
-        <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Confirmed subscriptions, one-time licenses and secure payment management.</p>
+        <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Premium monthly subscriptions, invoice history and secure payment management.</p>
         <button type="button" disabled={portalBusy || (subscriptions.length === 0 && purchases.length === 0)}
           onClick={openPortal} className="mt-4 rounded-lg bg-orca-deep-blue px-4 py-2 text-white font-bold disabled:opacity-50">
           {portalBusy ? 'Opening…' : 'Manage billing securely'}
@@ -91,7 +118,39 @@ export default function Billing() {
         </section>
       )}
       <section className="mt-8 space-y-4">
-        <h2 className="text-xl font-bold">One-time licenses</h2>
+        <h2 className="text-xl font-bold">Monthly invoices</h2>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Invoices are loaded directly from Stripe for your own billing account.</p>
+        {invoiceError ? <p role="alert" className="text-red-700 dark:text-red-300">{invoiceError}</p> : null}
+        {invoiceCustomers.length > 1 ? (
+          <label className="block text-sm">
+            Billing account
+            <select aria-label="Billing account" className="block mt-2 rounded-lg border px-3 py-2" value={invoiceCustomer}
+              onChange={(event) => { setInvoices([]); loadInvoices(event.target.value) }}>
+              {invoiceCustomers.map((customerId) => <option key={customerId} value={customerId}>{customerId}</option>)}
+            </select>
+          </label>
+        ) : null}
+        {invoices.length === 0 && !invoiceBusy ? (
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No invoices are available for this billing account yet.</p>
+        ) : invoices.map((invoice) => (
+          <article key={invoice.id} className="rounded-2xl border p-5" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+            <div className="flex flex-wrap justify-between gap-4">
+              <div>
+                <h3 className="font-bold">{invoice.number || 'Stripe invoice'}</h3>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(invoice.created_at).toLocaleDateString()} · {invoice.status || 'Pending'}</p>
+              </div>
+              <strong>{new Intl.NumberFormat('en-US', { style: 'currency', currency: (invoice.currency || 'usd').toUpperCase() }).format(Number(invoice.amount_due_cents || 0) / 100)}</strong>
+            </div>
+            <div className="flex flex-wrap gap-4 mt-3 text-sm">
+              {invoice.hosted_invoice_url ? <a className="underline" href={invoice.hosted_invoice_url} target="_blank" rel="noopener noreferrer">View invoice</a> : null}
+              {invoice.invoice_pdf ? <a className="underline" href={invoice.invoice_pdf} target="_blank" rel="noopener noreferrer">Invoice PDF</a> : null}
+            </div>
+          </article>
+        ))}
+        {invoiceCursor ? <button type="button" onClick={() => loadInvoices(invoiceCustomer, invoiceCursor)} disabled={invoiceBusy} className="rounded-lg border px-4 py-2 disabled:opacity-50">{invoiceBusy ? 'Loading…' : 'Load more invoices'}</button> : null}
+      </section>
+      <section className="mt-8 space-y-4">
+        <h2 className="text-xl font-bold">Historical one-time licenses</h2>
         {purchases.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No one-time purchases on this account.</p>
         ) : purchases.map((purchase) => (
