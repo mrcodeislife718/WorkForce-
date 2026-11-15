@@ -87,13 +87,12 @@ function assertStripePriceMatches(worker, price) {
   if (!price?.active || price.currency !== 'usd' || price.unit_amount !== amountCents) {
     throw new Error('The payment provider price does not match the advertised USD price.');
   }
-  if (worker.price_model === 'subscription') {
-    if (price.type !== 'recurring' || price.recurring?.interval !== 'month'
-      || Number(price.recurring?.interval_count) !== 1) {
-      throw new Error('This subscription must have a matching monthly Stripe price.');
-    }
-  } else if (worker.price_model === 'one_time' && price.type !== 'one_time') {
-    throw new Error('This purchase must have a one-time Stripe price.');
+  if (worker.price_model !== 'subscription') {
+    throw new Error('Workforce employee prices must be monthly subscriptions.');
+  }
+  if (price.type !== 'recurring' || price.recurring?.interval !== 'month'
+    || Number(price.recurring?.interval_count) !== 1) {
+    throw new Error('This employee must have a matching monthly Stripe price.');
   }
 }
 
