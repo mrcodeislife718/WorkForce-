@@ -52,7 +52,8 @@ async function activeSubscription(userId, workerId) {
 }
 
 async function hasEntitlement(userId, worker) {
-  if (worker.price_model === 'free') return { entitled: true, reason: 'free' };
+  // Workforce employee access is not granted by a free catalog flag.
+  if (worker.price_model === 'free') return { entitled: false, reason: 'monthly_subscription_required' };
   if (worker.price_model === 'one_time') {
     const purchase = await Purchase.findOne({
       where: { user_id: userId, worker_id: worker.id, status: { [Op.in]: ['paid', 'partially_refunded'] } },
