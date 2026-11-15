@@ -56,11 +56,18 @@ export default function WorkerCard({ worker }) {
           {systems.length ? <span>Systems: {systems.slice(0, 4).join(' · ')}</span> : null}
           <span>{worker.protect_level || 'ORCA Protect Standard'}</span>
         </div>
-        {pricing.orca_monthly_price > 0 ? (
+        {worker.price_model === 'one_time' ? (
+          <div className="orca-labor-price-box">
+            <strong>One-time license: {currency(worker.base_price)}</strong>
+            <p>No recurring subscription for this listing.</p>
+          </div>
+        ) : worker.price_model === 'free' ? (
+          <div className="orca-labor-price-box"><strong>Free</strong></div>
+        ) : pricing.orca_monthly_price > 0 ? (
           <div className="orca-labor-price-box">
             <div><span>Regular human salary benchmark</span><s>{currency(pricing.regular_salary_monthly)}/mo</s></div>
-            <div><span>ORCA launch rate ({pricing.launch_rate_percent}%)</span><strong>{currency(pricing.orca_monthly_price)}<small>/mo</small></strong></div>
-            <p>{currency(pricing.monthly_salary_savings)} monthly salary savings at launch.</p>
+            <div><span>Listed monthly price ({pricing.launch_rate_percent ?? 'unverified'}% of salary benchmark)</span><strong>{currency(pricing.orca_monthly_price)}<small>/mo</small></strong></div>
+            <p>{currency(pricing.monthly_salary_savings)} monthly difference from the salary benchmark (not verified net savings).</p>
             {Number(worker.activation_fee || 0) > 0 ? <p>Activation: {currency(Number(worker.activation_fee))} one-time.</p> : null}
           </div>
         ) : (
