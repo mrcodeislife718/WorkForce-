@@ -66,6 +66,7 @@ router.post('/jobs/:id', async (req, res) => {
         criteria: { source: 'customer_work_review', version: 1 },
         evidence: {
           feedback: decision.feedback,
+          work_summary: String(job.result?.summary || '').slice(0, 500),
           rating: decision.rating,
           customer_reported_minutes_saved: decision.customer_reported_minutes_saved,
           reviewed_by_user_id: req.user.id,
