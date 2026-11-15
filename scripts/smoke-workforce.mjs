@@ -39,6 +39,15 @@ for (const name of [
   assert.ok(Number(worker.base_price) > 1900, `Unexpectedly cheap professional price for ${name}`);
 }
 
+const bundles = [...(catalog.body.teams || []), ...(catalog.body.departments || [])];
+assert.ok(bundles.length >= 6, 'Published teams and departments must be in the real catalog.');
+for (const plan of bundles) {
+  assert.ok(plan.members?.length > 0, `Empty published workforce plan: ${plan.name}`);
+  const total = plan.members.reduce((sum, worker) => sum + Number(worker.base_price), 0);
+  assert.ok(Math.abs(total - Number(plan.pricing?.orca_monthly_price)) < 0.01,
+    `Team monthly price does not equal the actual premium employee prices for ${plan.name}`);
+}
+
 const email = `workforce-http-smoke+${randomUUID()}@example.test`;
 const password = `test-${randomUUID()}-secret`;
 const signup = await call('/api/auth/signup', {
@@ -60,6 +69,15 @@ assert.equal(me.body.user.id, signup.body.user.id);
 const unowned = await call('/api/console/overview');
 assert.equal(unowned.status, 401);
 
+const bundleSlug = bundles[0].slug;
+const bundleStatus = await call(`/api/billing/bundle/${bundleSlug}/status`, { token: login.body.token });
+assert.equal(bundleStatus.status, 200);
+assert.equal(bundleStatus.body.entitled, false, 'Free team access bypassed paid subscription.');
+const teamCheckout = await call('/api/billing/bundle-checkout-session', {
+  method: 'POST', token: login.body.token, body: { slug: bundleSlug },
+});
+assert.equal(teamCheckout.status, 503, 'Team checkout must fail closed without a real Workforce Stripe merchant.');
+
 const employeeId = people.find((p) => p.name === 'Evelyn Brooks').id;
 const billing = await call(`/api/billing/worker/${employeeId}/status`, { token: login.body.token });
 assert.equal(billing.status, 200);
@@ -78,4 +96,4 @@ const create = await call('/api/deployments', {
 });
 assert.equal(create.status, 409, 'Customer deployed without a paid subscription.');
 
-console.log('PASS: real PostgreSQL, real Express HTTP, full professional catalog, signup/login, identity separation and subscription enforcement.');
+console.log('PASS: real PostgreSQL, real Express HTTP, full professional catalog, signup/login, identity separation and premium individual/team subscription enforcement.');
