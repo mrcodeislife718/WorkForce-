@@ -15,6 +15,7 @@ const InterviewSession = require('./InterviewSession');
 const InterviewMessage = require('./InterviewMessage');
 const SampleAssignment = require('./SampleAssignment');
 const Subscription = require('./Subscription');
+const BundleSubscription = require('./BundleSubscription');
 const Purchase = require('./Purchase');
 const SupportTicket = require('./SupportTicket');
 const RuntimeJob = require('./RuntimeJob');
@@ -72,6 +73,10 @@ SampleAssignment.belongsTo(Worker, { foreignKey: 'worker_id' });
 InterviewSession.hasMany(SampleAssignment, { foreignKey: 'interview_session_id' });
 SampleAssignment.belongsTo(InterviewSession, { foreignKey: 'interview_session_id' });
 
+User.hasMany(BundleSubscription, { foreignKey: 'user_id' });
+BundleSubscription.belongsTo(User, { foreignKey: 'user_id' });
+WorkforceBundle.hasMany(BundleSubscription, { foreignKey: 'workforce_bundle_id' });
+BundleSubscription.belongsTo(WorkforceBundle, { foreignKey: 'workforce_bundle_id' });
 User.hasMany(Subscription, { foreignKey: 'user_id' });
 Subscription.belongsTo(User, { foreignKey: 'user_id' });
 Worker.hasMany(Subscription, { foreignKey: 'worker_id' });
@@ -157,6 +162,7 @@ module.exports = {
   InterviewMessage,
   SampleAssignment,
   Subscription,
+  BundleSubscription,
   Purchase,
   SupportTicket,
   Deployment,
