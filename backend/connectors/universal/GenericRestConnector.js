@@ -44,7 +44,13 @@ class GenericRestConnector extends ConnectorAdapter {
     const method = String(operation.method || 'GET').toUpperCase();
     if (!ALLOWED_METHODS.has(method)) throw new Error(`HTTP method ${method} is not allowed.`);
     const baseUrl = configuration.base_url.endsWith('/') ? configuration.base_url : `${configuration.base_url}/`;
-    const relativePath = interpolatePath(operation.path.replace(/^\//, ''), input.path_params || {});
+    const operationPath = String(operation.path);
+    // Operations are configured paths inside an allowlisted API host, never
+    // arbitrary model-produced destinations.
+    if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(operationPath) || operationPath.includes('\\\\')) {
+      throw new Error('REST operation paths must be relative to the approved API host.');
+    }
+    const relativePath = interpolatePath(operationPath.replace(/^\/+/, ''), input.path_params || {});
     const url = new URL(relativePath, baseUrl).toString();
     await assertSafeUrl(url, configuration.allowed_hosts || []);
 
@@ -63,6 +69,9 @@ class GenericRestConnector extends ConnectorAdapter {
       timeout: Number(process.env.CONNECTOR_REQUEST_TIMEOUT_MS || 30000),
       maxContentLength: Number(process.env.CONNECTOR_MAX_RESPONSE_BYTES || 5242880),
       maxBodyLength: Number(process.env.CONNECTOR_MAX_RESPONSE_BYTES || 5242880),
+      // Never follow provider redirects: a trusted public host must not
+      // redirect employee credentials or requests into internal networks.
+      maxRedirects: 0,
       validateStatus: (status) => status >= 200 && status < 300,
     });
 
@@ -108,6 +117,15 @@ class GenericRestConnector extends ConnectorAdapter {
   }
 
   async installDigitalEmployee({ connection, secrets, worker, deployment, grants, selectedResourceIds, telemetryToken }) {
+    if (connection.configuration?.lifecycle_mode !== 'managed') {
+      // The employee is attached inside Workforce, not falsely "installed"
+      // into a third-party API that has no such endpoint.
+      return {
+        ok: true,
+        external_installation_id: `workforce-direct:${deployment.id}`,
+        installation_scope: 'workforce_only',
+      };
+    }
     const operation = connection.configuration?.operations?.install;
     if (!operation) throw new Error('A real install operation must be configured for this workspace.');
     const response = await this.request({
@@ -145,6 +163,11 @@ class GenericRestConnector extends ConnectorAdapter {
   async uninstallDigitalEmployee(args) { return this.lifecycleRequest('uninstall', args); }
 
   async lifecycleRequest(action, { connection, secrets, deploymentConnection, worker }) {
+    if (connection.configuration?.lifecycle_mode !== 'managed') {
+      // No remote lifecycle request exists in direct API mode. Workforce
+      // still enforces the local deployment, capability and token states.
+      return { ok: true, status: 200, control_scope: 'workforce_only', action };
+    }
     const operation = connection.configuration?.operations?.[action];
     if (!operation) throw new Error(`A real ${action} operation must be configured.`);
     return this.request({
