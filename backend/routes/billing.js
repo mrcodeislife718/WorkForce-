@@ -1,6 +1,7 @@
 const express = require('express');
 const auth = require('../middleware/auth');
-const { Worker, Subscription, Purchase } = require('../models');
+const { Worker, Subscription, Purchase, BundleSubscription, WorkforceBundle } = require('../models');
+const { createBundleCheckoutSession, isBundleActive } = require('../services/bundleBillingService');
 const {
   stripeClient,
   stripePriceId,
@@ -34,6 +35,43 @@ router.post('/checkout-session', auth, async (req, res) => {
   } catch (error) {
     const status = error.code === 'STRIPE_NOT_CONFIGURED' ? 503 : 409;
     return res.status(status).json({ error: error.message || 'Unable to create checkout session.' });
+  }
+});
+
+// One checkout subscribes to every published member of a team/department.
+// No member is entitled until the signed Stripe event reconciles the exact
+// recurring price set and records the customer-owned bundle subscription.
+router.post('/bundle-checkout-session', auth, async (req, res) => {
+  try {
+    const slug = String(req.body?.slug || '').trim();
+    if (!slug || slug.length > 160) return res.status(400).json({ error: 'Valid workforce plan slug required.' });
+    return res.status(201).json(await createBundleCheckoutSession(req.user.id, slug));
+  } catch (error) {
+    return res.status(error.code === 'STRIPE_NOT_CONFIGURED' ? 503 : 409)
+      .json({ error: error.message || 'Unable to subscribe to this workforce plan.' });
+  }
+});
+
+router.get('/bundle/:slug/status', auth, async (req, res) => {
+  try {
+    const plan = await WorkforceBundle.findOne({ where: { slug: req.params.slug, status: 'published' } });
+    if (!plan) return res.status(404).json({ error: 'Team or department was not found.' });
+    const subscriptions = await BundleSubscription.findAll({
+      where: { user_id: req.user.id, workforce_bundle_id: plan.id, provider: 'stripe' },
+      order: [['updatedAt', 'DESC']],
+      limit: 20,
+    });
+    const active = subscriptions.find((subscription) => isBundleActive(subscription));
+    return res.json({
+      bundle_id: plan.id,
+      slug: plan.slug,
+      entitled: Boolean(active),
+      status: active?.status || subscriptions[0]?.status || 'subscription_required',
+      subscribed_employee_ids: active?.worker_ids || [],
+      current_period_end: active?.current_period_end || null,
+    });
+  } catch (_error) {
+    return res.status(500).json({ error: 'Unable to check workforce subscription.' });
   }
 });
 
@@ -74,7 +112,7 @@ router.get('/subscriptions', auth, async (req, res) => {
 // from records belonging to the authenticated Workforce customer.
 router.get('/invoices', auth, async (req, res) => {
   try {
-    const [subscriptions, purchases] = await Promise.all([
+    const [subscriptions, purchases, bundleSubscriptions] = await Promise.all([
       Subscription.findAll({
         where: { user_id: req.user.id, provider: 'stripe' },
         attributes: ['provider', 'provider_customer_id'],
@@ -85,9 +123,14 @@ router.get('/invoices', auth, async (req, res) => {
         attributes: ['provider_customer_id', 'createdAt'],
         order: [['createdAt', 'DESC']],
       }),
+      BundleSubscription.findAll({
+        where: { user_id: req.user.id, provider: 'stripe' },
+        attributes: ['provider', 'provider_customer_id'],
+        order: [['createdAt', 'DESC']],
+      }),
     ]);
     // Purchases are Stripe-only in the current model. Mark their provider explicitly.
-    const ids = ownedStripeCustomers(subscriptions, purchases.map((purchase) => ({
+    const ids = ownedStripeCustomers([...subscriptions, ...bundleSubscriptions], purchases.map((purchase) => ({
       provider: 'stripe', provider_customer_id: purchase.provider_customer_id,
     })));
     const customerId = selectOwnedCustomer(ids, req.query.customer_id);
@@ -131,7 +174,7 @@ router.get('/purchases', auth, async (req, res) => {
 
 router.post('/portal', auth, async (req, res) => {
   try {
-    const [subscription, purchase] = await Promise.all([
+    const [subscription, purchase, bundleSubscription] = await Promise.all([
       Subscription.findOne({
         where: { user_id: req.user.id, provider: 'stripe' },
         order: [['createdAt', 'DESC']],
@@ -140,8 +183,12 @@ router.post('/portal', auth, async (req, res) => {
         where: { user_id: req.user.id, provider: 'stripe' },
         order: [['createdAt', 'DESC']],
       }),
+      BundleSubscription.findOne({
+        where: { user_id: req.user.id, provider: 'stripe' },
+        order: [['createdAt', 'DESC']],
+      }),
     ]);
-    const customerId = subscription?.provider_customer_id || purchase?.provider_customer_id;
+    const customerId = subscription?.provider_customer_id || purchase?.provider_customer_id || bundleSubscription?.provider_customer_id;
     if (!customerId) return res.status(404).json({ error: 'No paid billing account is connected.' });
     const url = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripeClient().billingPortal.sessions.create({
