@@ -45,20 +45,23 @@ export default function Purchase() {
           <>
             <div className="flex justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold">{status.price_model === 'one_time' ? 'One-time digital employee license' : status.price_model === 'free' ? 'Free digital employee' : 'Monthly digital employee subscription'}</h2>
+                <h2 className="text-xl font-bold">Monthly digital employee subscription</h2>
                 <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>The employee is activated only after purchase confirmation and your workspace approval.</p>
               </div>
-              <p className="text-xl font-bold">${status.base_price}{status.price_model === 'subscription' ? '/mo' : ''}</p>
+              <p className="text-xl font-bold">${status.base_price}/mo</p>
             </div>
-            {!status.stripe_price_configured && status.price_model !== 'free' && (
+            {status.price_model !== 'subscription' && (
+              <p className="mt-4 text-amber-700 dark:text-amber-300">This employee is not available for a new hire until a paid monthly subscription is configured.</p>
+            )}
+            {!status.stripe_price_configured && status.price_model === 'subscription' && (
               <p className="mt-4 text-amber-700 dark:text-amber-300">A real Stripe price must be configured by ORCA before checkout can begin.</p>
             )}
             <button
               onClick={checkout}
-              disabled={busy || (!status.stripe_price_configured && status.price_model !== 'free')}
+              disabled={busy || status.price_model !== 'subscription' || !status.stripe_price_configured}
               className="mt-6 w-full rounded-lg bg-orca-deep-blue text-white font-bold py-3 disabled:opacity-50"
             >
-              {busy ? 'Opening secure checkout…' : status.price_model === 'free' ? 'Continue to deployment' : status.price_model === 'one_time' ? 'Buy securely' : 'Subscribe securely'}
+              {busy ? 'Opening secure checkout…' : 'Subscribe securely'}
             </button>
           </>
         )}
