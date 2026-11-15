@@ -20,6 +20,7 @@ import Interview from './pages/Interview.jsx'
 import SampleWork from './pages/SampleWork.jsx'
 import Purchase from './pages/Purchase.jsx'
 import PurchaseSuccess from './pages/PurchaseSuccess.jsx'
+import Support from './pages/Support.jsx'
 import DeploymentWizard from './pages/DeploymentWizard.jsx'
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
                 <Route path="/console" element={<ProtectedRoute><Console /></ProtectedRoute>} />
                 <Route path="/protect" element={<Protect />} />
                 <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+                <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
                 <Route path="/payouts" element={<Payouts />} />
                 <Route path="/policy-center" element={<PolicyCenter />} />
               </Routes>
