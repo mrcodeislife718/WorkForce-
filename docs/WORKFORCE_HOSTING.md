@@ -48,6 +48,36 @@ npm run dev
 
 The frontend's Vite dev proxy forwards `/api` requests to `http://localhost:5000`. The customer-facing Vercel website **cannot** reach the laptop's private `localhost`; this stack is for building and verifying the real product locally before choosing its 24/7 public hosting.
 
+### Run actual local AI employees, using your already-downloaded model
+
+Workforce can host its own real inference service in the **same private Docker Compose network** via the official CPU `llama.cpp` image. It does not need a new inference-provider account. Existing Ollama downloads are read as **GGUF model files**; Ollama does **not** serve inference for Workforce.
+
+```bash
+# First create your private local backend credentials if needed:
+bash scripts/setup-local-workforce.sh
+
+# Auto-detect an existing GGUF from your downloaded model manifests.
+# Or pass the absolute path of any existing GGUF as an argument.
+bash scripts/enable-local-ai.sh
+
+# Start real private model inference, PostgreSQL, and employee runtime:
+docker compose --env-file backend/.env --profile local-ai up -d --build
+
+# Seed the real database with all named professional employees:
+docker compose --env-file backend/.env --profile local-ai run --rm backend npm run seed
+
+# Verify model loading and backend:
+docker compose --env-file backend/.env --profile local-ai logs --tail 60 model
+curl -fsS http://localhost:5000/api/health
+```
+
+The local owner sign-in is `SEED_ADMIN_EMAIL` (defaults to `dev@orca.com`), with a random `SEED_ADMIN_PASSWORD` generated in `backend/.env`. The owner can inspect that password on their **own terminal** (never paste it into ChatGPT or GitHub). `INTERNAL_OWNER_TEST_ACCESS=true` enables this single seeded owner to actually deploy and assign work before Stripe is connected, **only outside production**. It does not grant customers free access or change the premium monthly pricing.
+
+For the five integration-oriented employees, connect a real existing service from the Connections page. Direct REST mode accepts ordinary provider APIs; Workforce handles its own deployment lifecycle locally. Customers explicitly authorize each capability and any consequential action.
+
+Large GGUF models on CPU-only hardware can be very slow. You can use a compatible smaller model file already available locally, without changing the product's backend or database. The model endpoint is private and must not be forwarded to the public Internet. The backend health endpoint checks PostgreSQL; check the model service logs and an actual sample assignment to verify inference.
+
+
 To protect local records, run a backup (produces a sensitive file outside Git):
 
 ```bash
