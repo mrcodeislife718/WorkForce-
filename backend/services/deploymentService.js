@@ -16,6 +16,7 @@ const registry = require('../connectors/registerBuiltins')();
 const { loadSecrets, validateConnection } = require('./connectionService');
 const { validateCapabilityAssignments } = require('./capabilityResolver');
 const { hasEntitlement } = require('./billingService');
+const { canDeployWithoutConnections } = require('./knowledgeDeployment');
 
 const PAST_TENSE = { pause: 'paused', resume: 'resumed', uninstall: 'uninstalled' };
 
@@ -58,7 +59,7 @@ async function loadOwnedConnections(userId, ids) {
 }
 
 async function createDeployment({ userId, workerId, name, bindings, capabilityAssignments }) {
-  if (!Array.isArray(bindings) || bindings.length === 0) throw new Error('At least one real workspace connection is required.');
+  if (!Array.isArray(bindings)) throw new Error('Workspace connection list must be provided.');
   if (!Array.isArray(capabilityAssignments)) throw new Error('Capability assignments are required.');
 
   const worker = await Worker.findOne({
@@ -66,6 +67,9 @@ async function createDeployment({ userId, workerId, name, bindings, capabilityAs
     include: [{ model: WorkerPermission }],
   });
   if (!worker) throw new Error('Digital employee was not found.');
+  if (bindings.length === 0 && !canDeployWithoutConnections(worker.WorkerPermissions)) {
+    throw new Error('This digital employee needs at least one approved workspace connection.');
+  }
   const eligibility = await assertDeploymentEligibility(userId, worker);
   if (!eligibility.eligible) {
     const error = new Error('Digital employee deployment requirements are incomplete.');
