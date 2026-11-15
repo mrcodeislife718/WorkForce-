@@ -20,6 +20,7 @@ const PRICE_ENV_BY_WORKER = {
   'cccccccc-cccc-cccc-cccc-cccccccccccc': 'STRIPE_PRICE_COMMERCE_SUPPORT',
   'dddddddd-dddd-dddd-dddd-dddddddddddd': 'STRIPE_PRICE_SALES_FOLLOW_UP',
   'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee': 'STRIPE_PRICE_CONTENT_PRODUCTION',
+  'ffffffff-ffff-4fff-8fff-fffffffffff1': 'STRIPE_PRICE_RESEARCH_BRIEFING',
 };
 
 function stripeClient() {
@@ -99,11 +100,8 @@ async function createCheckoutSession(userId, workerId) {
   const worker = await Worker.findOne({ where: { id: workerId, status: 'published' } });
   if (!worker) throw new Error('Digital employee was not found.');
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  if (worker.price_model === 'free') {
-    return { free: true, url: `${frontendUrl}/deploy/${worker.id}` };
-  }
-  if (!['subscription', 'one_time'].includes(worker.price_model)) {
-    throw new Error('Unsupported purchase model.');
+  if (worker.price_model !== 'subscription') {
+    throw new Error('New Workforce employee hires require a paid monthly subscription.');
   }
   const priceId = stripePriceId(worker);
   if (!priceId) throw new Error('This digital employee does not have a real Stripe price configured.');
@@ -137,7 +135,7 @@ async function createCheckoutSession(userId, workerId) {
     customerId = customer.id;
   }
   const metadata = { orca_user_id: user.id, orca_worker_id: worker.id };
-  const mode = worker.price_model === 'subscription' ? 'subscription' : 'payment';
+  const mode = 'subscription';
   const session = await stripe.checkout.sessions.create({
     mode,
     customer: customerId,
