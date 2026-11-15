@@ -56,13 +56,11 @@ export default function WorkerCard({ worker }) {
           {systems.length ? <span>Systems: {systems.slice(0, 4).join(' · ')}</span> : null}
           <span>{worker.protect_level || 'ORCA Protect Standard'}</span>
         </div>
-        {worker.price_model === 'one_time' ? (
-          <div className="orca-labor-price-box">
-            <strong>One-time license: {currency(worker.base_price)}</strong>
-            <p>No recurring subscription for this listing.</p>
+        {worker.price_model !== 'subscription' ? (
+          <div className="orca-labor-price-box orca-labor-price-box--pending">
+            <strong>Monthly subscription required</strong>
+            <p>This listing is not available for new employee hires until its monthly price is configured.</p>
           </div>
-        ) : worker.price_model === 'free' ? (
-          <div className="orca-labor-price-box"><strong>Free</strong></div>
         ) : pricing.orca_monthly_price > 0 ? (
           <div className="orca-labor-price-box">
             <div><span>Regular human salary benchmark</span><s>{currency(pricing.regular_salary_monthly)}/mo</s></div>
