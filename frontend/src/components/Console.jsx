@@ -29,6 +29,7 @@ export default function Console() {
   const [actionId, setActionId] = useState(null)
   const [taskDeploymentId, setTaskDeploymentId] = useState(null)
   const [task, setTask] = useState({ title: '', instructions: '', priority: 50 })
+  const [reviewDrafts, setReviewDrafts] = useState({})
 
   const load = async (showLoading = false) => {
     if (showLoading) setLoading(true)
@@ -96,6 +97,24 @@ export default function Console() {
       await load(false)
     } catch (requestError) {
       setError(requestError.response?.data?.error || `Unable to ${decision} action.`)
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  const submitReview = async (job, decision) => {
+    setActionId(job.id)
+    setError('')
+    try {
+      const draft = reviewDrafts[job.id] || {}
+      await api.post(`/api/reviews/jobs/${job.id}`, {
+        decision,
+        feedback: draft.feedback || '',
+        minutes_saved: draft.minutes_saved === '' || draft.minutes_saved == null ? null : Number(draft.minutes_saved),
+      })
+      await load(false)
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || 'Unable to save your feedback.')
     } finally {
       setActionId(null)
     }
@@ -241,6 +260,41 @@ export default function Console() {
               </div>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Attempts {job.attempt_count}/{job.max_attempts} · queued {new Date(job.createdAt).toLocaleString()}</p>
               {job.last_error && <p className="text-sm mt-1 text-red-600">{job.last_error}</p>}
+              {job.job_type === 'deployment_task' && job.result?.deliverable && (
+                <details className="mt-3">
+                  <summary className="font-semibold cursor-pointer">Read delivered work</summary>
+                  <pre className="mt-2 p-3 rounded-lg whitespace-pre-wrap break-words text-sm" style={{ backgroundColor: 'var(--bg-primary)' }}>{job.result.deliverable}</pre>
+                </details>
+              )}
+              {job.job_type === 'deployment_task' && job.status === 'completed' && (() => {
+                const prior = (overview.customer_reviews || []).find((review) => review.task_run_id === job.payload?.task_run_id)
+                const draft = reviewDrafts[job.id] || {}
+                return (
+                  <div className="mt-3">
+                    {prior && <p className="text-sm font-semibold">Customer review: {prior.status === 'verified' ? 'Accepted' : 'Corrections requested'}</p>}
+                    <label className="block mt-2 text-sm font-semibold" htmlFor={`review-${job.id}`}>Feedback for this employee</label>
+                    <textarea id={`review-${job.id}`} className="w-full rounded-lg border p-2 mt-1" rows={2}
+                      placeholder="What was useful, or what should improve?"
+                      value={draft.feedback || ''}
+                      onChange={(event) => setReviewDrafts((current) => ({
+                        ...current, [job.id]: { ...current[job.id], feedback: event.target.value },
+                      }))} />
+                    <label className="block mt-2 text-sm" htmlFor={`minutes-${job.id}`}>Minutes saved (only if you measured or can reasonably confirm them)</label>
+                    <input id={`minutes-${job.id}`} className="rounded-lg border p-2 mt-1" type="number" min="0"
+                      value={draft.minutes_saved || ''}
+                      onChange={(event) => setReviewDrafts((current) => ({
+                        ...current, [job.id]: { ...current[job.id], minutes_saved: event.target.value },
+                      }))} />
+                    <div className="flex gap-2 mt-3">
+                      <button disabled={actionId === job.id} onClick={() => submitReview(job, 'accepted')}
+                        className="rounded-lg bg-orca-deep-blue text-white px-3 py-2 text-sm font-semibold disabled:opacity-50">Accept work</button>
+                      <button disabled={actionId === job.id || (draft.feedback || '').trim().length < 10}
+                        onClick={() => submitReview(job, 'rejected')}
+                        className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">Request corrections</button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>
