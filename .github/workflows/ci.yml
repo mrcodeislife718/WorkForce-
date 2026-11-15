@@ -71,3 +71,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm install
       - run: npm run build
+
+  compose-configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify self-hosted PostgreSQL and backend configuration
+        run: |
+          cp backend/.env.example backend/.env
+          sed -i 's/^DB_PASSWORD=$/DB_PASSWORD=ci-local-only/' backend/.env
+          docker compose --env-file backend/.env config --quiet
+          grep -q '^backups/$' .gitignore
