@@ -1,61 +1,54 @@
-# Workforce — engineering and economic completion record
+# Workforce — verified implementation and launch record
 
-Last reviewed: 2026-11-15. This document describes source-code implementation, NOT a production launch.
+Reviewed 2026-11-15. WorkForce- is an independent ORCA/Workforce digital-employee marketplace, Store, Console and Protect product. This is a description of **software committed on `main`**, not a claim that commercial deployment is live.
 
-## Scope and ownership
+## Completion-first engineering checks
 
-Product: independent Workforce Store, Workforce Console and Workforce Protect platform.
-Source: this repository, main branch. Preserve the existing ORCA identity and commercial operation unless the owner approves a change.
-Authority: customer permissions for runtime activity; project owner for architecture, billing arrangements, deployment and consequential decisions.
-No artificial employee, industry, model or project limits. Maintain private data isolation.
+- Original source kept: Express, Sequelize/PostgreSQL, React/Vite, named employees, permissions, encrypted connector credentials, managed/direct API adapters, runtime and checkpoint recovery, signed Stripe checkout/webhooks, customer reviews and support.
+- The entire professional catalog has no hard-coded industry/category enum. A non-destructive migration carries existing employee rows into an extensible category column.
+- Ten named employees are listed with role-specific skills, premium **monthly** prices, professional permissions and actual work contracts. New roles include engineering, analytics, finance and people operations.
+- Actual existing REST APIs can be connected via a customer-owned token. A GitHub Issues preset uses the exact selected repository for issue reading and human-approved issue creation; no provider-specific ORCA install API is demanded.
+- Employees generate work, observe actual provider tool results, prepare a grounded deliverable after external calls, and accept customer feedback. A rejected deliverable queues a **new written correction** without blindly replaying prior external side effects. Customer-approved verified lessons are scoped to the deployment.
+- Job leases heartbeat through PostgreSQL; uncertain external effects are held for reconciliation after interruption; actions are gated by capability, selected resource, user approval and deterministic policy.
+- A separate encrypted service runs existing GGUF model files through the official llama.cpp server image, in a private Docker network. **Ollama is not the runtime**. PostgreSQL and the persistent Node employee backend run in the same Compose stack, no Supabase account.
+- Local seeded developer account may hire/assign live employee work without paying itself **only with a private, randomly generated password and `INTERNAL_OWNER_TEST_ACCESS=true` outside production**. Normal customer subscription enforcement and monthly pricing remain mandatory.
+- Store includes individuals, teams and departments. The source implements one Stripe Checkout subscription for a paid bundle and reconciles its exact recurring line items before entitlement; a customer's rights are derived from the original paid member set, not arbitrary future catalog changes.
+- CI: backend unit tests and real PostgreSQL + HTTP signup/login/catalog/entitlement checks; Vite frontend build; Docker Compose config; project proof gate. See the current `main` GitHub Actions status, not an earlier commit's status.
 
-## Engineering rules — enforced or open
+## Eight engineering rules
 
-1. Existing code first: original Express/PostgreSQL, React, Stripe, connectors, policy controls, worker roster, runtime and checkpoints retained. Done for these changes.
-2. Finish original objective: full multi-industry autonomous employees and complete marketplace are NOT production verified.
-3. Repair rather than replan: implemented task delivery, review, billing, price alignment, crash recovery and knowledge-only deployment; tests added.
-4. Preserve functioning work/data: additive Purchase table migration; no table removal, old subscription records and external connector rules retained.
-5. Complete customer workflow: customer sign-in, listing, purchase, guarded deployment, assignment, delivery, review, billing and operations surfaces exist in source. External live services and all end-to-end flows require verification.
-6. Evidence for completion: GitHub CI validates building and source tests, not real customer service, money movement, external tool execution or production failover.
-7. Ownership: no project merger, forced paid model or deployment. Configured provider credentials remain customer controlled.
-8. Recovery: recorded checkpoints, interrupted-job recovery, external-action repeat prevention; live interruption tests remain.
+1. Inspect and preserve actual source: **implemented**.
+2. Deliver a complete usable commercial autonomous workforce, not only samples: **source significantly expanded; external real customers not yet verified**.
+3. Fix integration faults directly: **implemented** for startup index collision, category restriction, direct REST adapter, and review-to-correction.
+4. Protect existing data and project identity: **implemented** for legacy category migration, database volume, backups and customer-scoped records; restoration must still be tested.
+5. Real work, auth, billing, professional tools, support, recovery: **implemented as code**, dependent on real configured model, Stripe merchant and customer workspaces.
+6. Independent verification with outcome evidence: **automated checks**, live task acceptance and side-effect reconciliation remain.
+7. Owner authorization for risky actions and deployment: **enforced in source and required operationally**.
+8. Persistence and self-improvement from verified lessons: **implemented and guarded**, reliability under actual live interruption remains to be tested.
 
-## Economic rules — enforced or open
+## Eight economic production rules
 
-1. Economic purpose: customer hires digital employees for measurable professional work. Internal productivity and commercial sale are distinct.
-2. Revenue collection: Stripe subscriptions and one-time checkout implemented with signed webhooks, status records and refund/dispute gating. Live money and full invoice/fee reconciliation remain unverified.
-3. Acquisition: catalog and discovery surfaces exist. Source-level paid conversion attribution, actual external campaigns and real lead acquisition measurements are not complete.
-4. Purchase friction: evaluation is optional, but customer billing and permission confirmation remain mandatory.
-5. Delivery and retention: actionable work, customer acceptance/rejection, durable lessons and console inspection implemented. A customer support ticket and response workflow is implemented in source. Live responsiveness and customer success monitoring remain unverified.
-6. Financial evidence: verified one-time receipts net of recorded refunds, recorded execution expenses and subscription status have distinct reporting. True accounting cash reconciliation, taxes and full margins remain.
-7. Real outcomes: accepted/rejected counts, separately labeled customer-reported time saved, no simulated conversion or acceptance numbers.
-8. Repeatability: scheduled job recovery and checks implemented; actual deployment resilience, independent monitoring and capacity proof remain.
+1. Digital employees serve a real customer business function with named deliverables: implemented in profiles and runtime.
+2. Premium recurring monthly prices, checkout, subscriptions, invoices and teams: implemented in source; actual Workforce Stripe merchant and signed production webhooks not connected.
+3. Customer acquisition: catalog and sales funnel implemented; campaigns, attribution and actual conversions not launched or measured.
+4. Buyer conversion: purchase CTA, Stripe Checkout, signed payment confirmation and access gating implemented.
+5. Service and retention: console, recurring tasks, support and automatic correction to rejected work implemented; real customer retention unmeasured.
+6. Financial evidence: costs and invoices recorded; bank settlement/tax and full net margins not reconciled.
+7. Outcome quality: no simulated acceptance claims; independently reviewable customer receipts exist.
+8. Sustainable operation: persistent backend and backup scripts prepared, but **no commercial-grade always-on backend is live**.
 
-## Current software
+## External deployment boundaries
 
-- Existing roster and teams preserved.
-- New research/briefing worker Evelyn Brooks can be hired free, without outside accounts, for substantive knowledge work once a real text model is configured.
-- External-tool workers retain customer-selected connections and permission enforcement.
-- Every completed assignment can be delivered and then accepted/rejected; only customer-approved lessons feed back within that deployment.
-- Stripe subscription and one-time billing records are distinct; refunds and disputes can remove one-time entitlement.
-- Worker interruption recovery uses recorded action progress and pauses uncertain work to prevent accidental duplicate side effects.
-- Authenticated customer economic report has real-record counts, recorded costs, confirmed one-time spending and separately labeled self-reported savings.
-- Private support requests and replies work through signed-in customer accounts; a configured trusted support account can review and resolve requests.
+The only connected Vercel project is `workforce` in `mrbronxny718-2363s-projects`, rooted at `frontend/`. The commercial frontend is not deployed, and Vercel Hobby commercial eligibility must be checked. A customer's web browser cannot access a private laptop's `localhost` backend.
 
-## Last known state
+The backend may be developed with **owner-controlled local PostgreSQL and a previously downloaded GGUF**; installing Docker, booting the actual model on the user's ThinkPad, and testing a real assignment must be completed in that environment. Remote CI has no access to the laptop or model files.
 
-Source changes: committed to main.
-Automated verification: check the latest GitHub Actions run for the current main revision. Passing CI does not establish live readiness.
-Production deployment: not independently verified in this development session.
-External credentials and third-party service authorization: not supplied in this development session.
-Payment charge/refund integration: source implemented; real signed event testing pending.
-Free model serving: configurable real provider; actual provider not verified.
-Customer acquisition attribution, verified live support fulfillment, advanced team coordination, enterprise administration, full financial reconciliation and real production load/recovery testing: incomplete.
+**Do not use unrelated JiffyLaundry Stripe credentials.** Paid Workforce production hiring and team billing require a separate authorized Workforce merchant, actual per-employee monthly Price IDs, signed webhook secrets and verified test events. No live Stripe merchant was used or charged in this work.
 
-## Next concrete engineering action
+Avoid claiming production success, confirmed uptime, verified model outputs, real customer revenues or customer acceptance without real end-to-end evidence. Do not add accounts or spend money without owner authorization.
 
-Run the existing GitHub CI on main, repair failing builds/tests, then perform end-to-end tests against an authorized PostgreSQL database, a real compatible model, protected test connections and Stripe test mode. Confirm complete flows with evidence before any owner-approved production deployment.
+## Instructions
 
-## Completion reporting
+Local self-hosted operation: `docs/WORKFORCE_HOSTING.md`.
 
-Always report source implemented, tests passed, integrations verified, live deployed, real customer outcome and actual financial production separately. Never describe missing evidence as a passing result.
+Current code and build checks: `https://github.com/mrcodeislife718/WorkForce-/actions`.
