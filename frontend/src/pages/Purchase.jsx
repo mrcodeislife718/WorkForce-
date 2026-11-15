@@ -48,7 +48,25 @@ export default function Purchase() {
                 <h2 className="text-xl font-bold">{status.price_model === 'one_time' ? 'One-time digital employee license' : status.price_model === 'free' ? 'Free digital employee' : 'Monthly digital employee subscription'}</h2>
                 <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>The employee is activated only after purchase confirmation and your workspace approval.</p>
               </div>
-              <p className="text-xl font-bold"></p>
+              <p className="text-xl font-bold">${'
+            </div>
+            {!status.stripe_price_configured && status.price_model !== 'free' && (
+              <p className="mt-4 text-amber-700 dark:text-amber-300">A real Stripe price must be configured by ORCA before checkout can begin.</p>
+            )}
+            <button
+              onClick={checkout}
+              disabled={busy || (!status.stripe_price_configured && status.price_model !== 'free')}
+              className="mt-6 w-full rounded-lg bg-orca-deep-blue text-white font-bold py-3 disabled:opacity-50"
+            >
+              {busy ? 'Opening secure checkout…' : status.price_model === 'free' ? 'Continue to deployment' : status.price_model === 'one_time' ? 'Buy securely' : 'Subscribe securely'}
+            </button>
+          </>
+        )}
+      </section>
+    </main>
+  )
+}
+}{status.base_price}{status.price_model === 'subscription' ? '/mo' : ''}</p>
             </div>
             {!status.stripe_price_configured && status.price_model !== 'free' && (
               <p className="mt-4 text-amber-700 dark:text-amber-300">A real Stripe price must be configured by ORCA before checkout can begin.</p>
