@@ -39,6 +39,15 @@ export default function WorkforceBundleDetail() {
             <span><small>Salary savings</small><strong>{currency(bundle.pricing?.monthly_salary_savings)}/mo</strong></span>
           </div>
         </section>
+        <div className="mt-6 mb-7">
+          <Link to={`/purchase/bundle/${bundle.slug}`}
+            className="inline-flex rounded-lg bg-orca-deep-blue text-white px-6 py-3 font-bold">
+            Hire this complete ${bundle.type} — monthly subscription
+          </Link>
+          <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+            One checkout covers all listed members. Each employee is deployed separately with your approved permissions.
+          </p>
+        </div>
         <CatalogCarousel title="Workforce Makeup" subtitle="Every member has a separate profile, interview, sample-work flow, permissions, and salary benchmark.">
           {(bundle.members || []).map((worker) => <WorkerCard key={worker.id} worker={worker} />)}
         </CatalogCarousel>
