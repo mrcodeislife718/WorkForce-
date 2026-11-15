@@ -5,6 +5,7 @@ const migrateCompleteFlowSchema = require('../migrations/completeFlowMigration')
 const migrateStoreCatalogSchema = require('../migrations/storeCatalogMigration');
 const migrateMarketControlPlaneSchema = require('../migrations/marketControlPlaneMigration');
 const migratePremiumCatalogMetadata = require('../migrations/premiumCatalogMetadataMigration');
+const migrateOpenIndustryCategories = require('../migrations/openIndustryCategoriesMigration');
 
 async function run() {
   await sequelize.authenticate();
@@ -12,6 +13,7 @@ async function run() {
   await migrateCompleteFlowSchema();
   await migrateStoreCatalogSchema();
   await migrateMarketControlPlaneSchema();
+  await migrateOpenIndustryCategories();
   await sequelize.sync();
   await migratePremiumCatalogMetadata();
   console.log('ORCA production schema and catalog migration completed without deleting existing data.');
