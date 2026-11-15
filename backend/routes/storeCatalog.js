@@ -24,7 +24,6 @@ function serializeWorker(worker) {
     skills: cleanList(data.skills),
     work_modes: cleanList(data.work_modes),
     pricing,
-    base_price: pricing.orca_monthly_price,
   };
 }
 
