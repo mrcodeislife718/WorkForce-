@@ -294,6 +294,8 @@ async function processDeploymentTask(job) {
         ? String(job.payload.instructions || '').slice(0, 4000)
         : null,
     });
+    // Persist ownership immediately, so a restart resumes the same task record.
+    await job.update({ payload: { ...job.payload, task_run_id: taskRun.id } });
   } else if (taskRun.status === 'waiting_for_approval') {
     await taskRun.update({ status: 'running' });
   }
@@ -505,12 +507,28 @@ async function processHealthCheck(job) {
 
 async function failOrRetry(job, error) {
   const attempts = job.attempt_count;
-  if (attempts < job.max_attempts && error.code !== 'MODEL_PROVIDER_NOT_CONFIGURED') {
+  const taskId = job.payload?.task_run_id;
+  let unsafeToRepeat = false;
+  if (job.job_type === 'deployment_task' && taskId) {
+    const executions = await CapabilityExecution.findAll({
+      where: { task_run_id: taskId },
+      attributes: ['id', 'status'],
+    });
+    unsafeToRepeat = recoveryDisposition(job, executions) === 'human_reconciliation';
+  }
+
+  const failedReason = unsafeToRepeat
+    ? 'An external action may have occurred. Human review is needed before repeating this assignment.'
+    : String(error.message || error).slice(0, 4000);
+
+  if (!unsafeToRepeat && attempts < job.max_attempts
+    && error.code !== 'MODEL_PROVIDER_NOT_CONFIGURED'
+    && error.code !== 'WORKFORCE_POLICY_DENIED') {
     const delaySeconds = Math.min(900, 2 ** attempts * 15);
     await job.update({
       status: 'queued',
       run_after: new Date(Date.now() + delaySeconds * 1000),
-      last_error: String(error.message || error).slice(0, 4000),
+      last_error: failedReason,
       locked_at: null,
       locked_by: null,
     });
@@ -519,7 +537,7 @@ async function failOrRetry(job, error) {
 
   await job.update({
     status: 'failed',
-    last_error: String(error.message || error).slice(0, 4000),
+    last_error: failedReason,
     completed_at: new Date(),
     locked_at: null,
     locked_by: null,
@@ -528,20 +546,31 @@ async function failOrRetry(job, error) {
   if (job.sample_assignment_id) {
     await SampleAssignment.update({
       status: 'failed',
-      failure_reason: String(error.message || error).slice(0, 4000),
+      failure_reason: failedReason,
       completed_at: new Date(),
     }, { where: { id: job.sample_assignment_id } });
   }
   if (job.deployment_id) {
+    if (unsafeToRepeat) {
+      await Deployment.update({ status: 'paused', paused_at: new Date() }, {
+        where: { id: job.deployment_id, status: 'active' },
+      });
+    }
+    if (taskId) {
+      await TaskRun.update({
+        status: 'failed', failure_reason: failedReason, completed_at: new Date(),
+      }, { where: { id: taskId, status: 'running' } });
+    }
     await DeploymentEvent.create({
       deployment_id: job.deployment_id,
-      event_type: 'runtime.job.failed',
-      severity: 'error',
-      message: 'A digital employee runtime job failed.',
+      event_type: unsafeToRepeat ? 'runtime.review_required' : 'runtime.job.failed',
+      severity: unsafeToRepeat ? 'critical' : 'error',
+      message: unsafeToRepeat
+        ? 'Work was paused because an external action needs manual reconciliation.'
+        : 'A digital employee runtime job failed.',
       metadata: {
         runtime_job_id: job.id,
         job_type: job.job_type,
-        error: String(error.message || error).slice(0, 1000),
         trace_id: job.payload?.trace_id || null,
       },
     });
