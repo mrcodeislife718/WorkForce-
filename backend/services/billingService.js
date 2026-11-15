@@ -21,6 +21,10 @@ const PRICE_ENV_BY_WORKER = {
   'dddddddd-dddd-dddd-dddd-dddddddddddd': 'STRIPE_PRICE_SALES_FOLLOW_UP',
   'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee': 'STRIPE_PRICE_CONTENT_PRODUCTION',
   'ffffffff-ffff-4fff-8fff-fffffffffff1': 'STRIPE_PRICE_RESEARCH_BRIEFING',
+  'ffffffff-ffff-4fff-8fff-fffffffffff2': 'STRIPE_PRICE_ENGINEERING_OPERATIONS',
+  'ffffffff-ffff-4fff-8fff-fffffffffff3': 'STRIPE_PRICE_DATA_ANALYTICS',
+  'ffffffff-ffff-4fff-8fff-fffffffffff4': 'STRIPE_PRICE_FINANCE_OPERATIONS',
+  'ffffffff-ffff-4fff-8fff-fffffffffff5': 'STRIPE_PRICE_PEOPLE_OPERATIONS',
 };
 
 function stripeClient() {
