@@ -231,7 +231,9 @@ async function prepareDatabase() {
   await migrateOpenIndustryCategories();
   await migratePurchases();
   await migrateSupport();
-  const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
+  // Schema changes are an explicit release operation; startup does not mutate
+  // production or seeded local database indexes on every restart.
+  const syncMode = process.env.DB_SYNC_MODE || 'none';
   if (syncMode === 'alter') await sequelize.sync({ alter: true });
   else if (syncMode === 'create') await sequelize.sync();
   await migratePremiumCatalogMetadata();
