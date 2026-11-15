@@ -12,6 +12,7 @@ const migrateCompleteFlowSchema = require('./migrations/completeFlowMigration');
 const migrateStoreCatalogSchema = require('./migrations/storeCatalogMigration');
 const migrateMarketControlPlaneSchema = require('./migrations/marketControlPlaneMigration');
 const migratePremiumCatalogMetadata = require('./migrations/premiumCatalogMetadataMigration');
+const migrateOpenIndustryCategories = require('./migrations/openIndustryCategoriesMigration');
 const migratePurchases = require('./migrations/purchaseMigration');
 const migrateSupport = require('./migrations/supportMigration');
 const { createRateLimiter, requestSecurity, validateProductionEnvironment } = require('./security/productionBoundary');
@@ -227,6 +228,7 @@ async function prepareDatabase() {
     await migrateStoreCatalogSchema();
     await migrateMarketControlPlaneSchema();
   }
+  await migrateOpenIndustryCategories();
   await migratePurchases();
   await migrateSupport();
   const syncMode = process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'none' : 'alter');
