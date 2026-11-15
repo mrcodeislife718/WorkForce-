@@ -26,7 +26,7 @@ No artificial employee, industry, model or project limits. Maintain private data
 2. Revenue collection: Stripe subscriptions and one-time checkout implemented with signed webhooks, status records and refund/dispute gating. Live money and full invoice/fee reconciliation remain unverified.
 3. Acquisition: catalog and discovery surfaces exist. Source-level paid conversion attribution, actual external campaigns and real lead acquisition measurements are not complete.
 4. Purchase friction: evaluation is optional, but customer billing and permission confirmation remain mandatory.
-5. Delivery and retention: actionable work, customer acceptance/rejection, durable lessons and console inspection implemented. Dedicated support workflow and real customer success monitoring remain.
+5. Delivery and retention: actionable work, customer acceptance/rejection, durable lessons and console inspection implemented. A customer support ticket and response workflow is implemented in source. Live responsiveness and customer success monitoring remain unverified.
 6. Financial evidence: verified one-time receipts net of recorded refunds, recorded execution expenses and subscription status have distinct reporting. True accounting cash reconciliation, taxes and full margins remain.
 7. Real outcomes: accepted/rejected counts, separately labeled customer-reported time saved, no simulated conversion or acceptance numbers.
 8. Repeatability: scheduled job recovery and checks implemented; actual deployment resilience, independent monitoring and capacity proof remain.
@@ -40,6 +40,7 @@ No artificial employee, industry, model or project limits. Maintain private data
 - Stripe subscription and one-time billing records are distinct; refunds and disputes can remove one-time entitlement.
 - Worker interruption recovery uses recorded action progress and pauses uncertain work to prevent accidental duplicate side effects.
 - Authenticated customer economic report has real-record counts, recorded costs, confirmed one-time spending and separately labeled self-reported savings.
+- Private support requests and replies work through signed-in customer accounts; a configured trusted support account can review and resolve requests.
 
 ## Last known state
 
@@ -49,7 +50,7 @@ Production deployment: not independently verified in this development session.
 External credentials and third-party service authorization: not supplied in this development session.
 Payment charge/refund integration: source implemented; real signed event testing pending.
 Free model serving: configurable real provider; actual provider not verified.
-Customer acquisition, support fulfillment, advanced team coordination, enterprise administration, full financial reconciliation and real production load/recovery testing: incomplete.
+Customer acquisition attribution, verified live support fulfillment, advanced team coordination, enterprise administration, full financial reconciliation and real production load/recovery testing: incomplete.
 
 ## Next concrete engineering action
 
