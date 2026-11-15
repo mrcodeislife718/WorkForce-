@@ -54,6 +54,8 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run seed
+      - name: Verify migrations and catalog seed can be repeated without dropping data
+        run: npm run seed
       - name: Verify real PostgreSQL + Express employee customer flow
         run: |
           DB_SYNC_MODE=none RUN_LEGACY_MIGRATIONS=false node server.js > /tmp/workforce-http-smoke.log 2>&1 &
