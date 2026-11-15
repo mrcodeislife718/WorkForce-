@@ -35,3 +35,6 @@ Thumbs.db
 *.tmp
 *.swp
 .cache/
+
+# Local PostgreSQL database snapshots (private)
+backups/
