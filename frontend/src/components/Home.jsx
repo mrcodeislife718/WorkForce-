@@ -75,7 +75,7 @@ export default function Home() {
               <span><strong>{catalog?.counts?.employees || 0}</strong> published digital employees</span>
               <span><strong>{catalog?.counts?.teams || 0}</strong> teams</span>
               <span><strong>{catalog?.counts?.departments || 0}</strong> departments</span>
-              <span><strong>35%</strong> launch salary rate</span>
+              <span><strong>Real</strong> checkout prices</span>
             </div>
           </div>
           <div className="orca-hero__visual" aria-hidden="true">
