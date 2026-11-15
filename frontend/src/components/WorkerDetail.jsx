@@ -85,7 +85,7 @@ export default function WorkerDetail() {
           </article>
           <article>
             <h3>Launch pricing</h3>
-            {pricing.orca_monthly_price > 0 ? <><p>Regular human salary benchmark: <strong>{currency(pricing.regular_salary_monthly)}/month</strong></p><p>ORCA launch rate: <strong>{currency(pricing.orca_monthly_price)}/month</strong></p><p>Approximate salary savings: <strong>{currency(pricing.monthly_salary_savings)}/month</strong></p>{Number(resolvedWorker.activation_fee || 0) > 0 ? <p>Activation fee: <strong>{currency(Number(resolvedWorker.activation_fee))}</strong></p> : null}</> : <p>A verified salary benchmark is required before purchase.</p>}
+            {resolvedWorker.price_model === 'one_time' ? <p>One-time license: <strong>{currency(resolvedWorker.base_price)}</strong></p> : resolvedWorker.price_model === 'free' ? <p>Free employee listing.</p> : pricing.orca_monthly_price > 0 ? <><p>Regular human salary benchmark: <strong>{currency(pricing.regular_salary_monthly)}/month</strong></p><p>Listed monthly price: <strong>{currency(pricing.orca_monthly_price)}/month</strong></p><p>Salary benchmark difference (not verified savings): <strong>{currency(pricing.monthly_salary_savings)}/month</strong></p>{Number(resolvedWorker.activation_fee || 0) > 0 ? <p>Activation fee: <strong>{currency(Number(resolvedWorker.activation_fee))}</strong></p> : null}</> : <p>A verified salary benchmark is required before purchase.</p>}
             <strong>Included workload</strong>
             <p>{resolvedWorker.included_workload || 'Finalized during role scoping.'}</p>
             {resolvedWorker.overage_pricing ? <><strong>Overage policy</strong><p>{resolvedWorker.overage_pricing}</p></> : null}
