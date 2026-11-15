@@ -1,0 +1,52 @@
+# Workforce local stack: private PostgreSQL + persistent employee API.
+# No Supabase account or additional cloud service is required.
+name: workforce
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Set DB_NAME in backend/.env}
+      POSTGRES_USER: ${DB_USER:?Set DB_USER in backend/.env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in backend/.env}
+    volumes:
+      - workforce_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - workforce_private
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Local development only. This container is bound to loopback on the host.
+      NODE_ENV: development
+      DATABASE_URL: ""
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_SSL: "false"
+      PORT: "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WORKFORCE_LOCAL_API_PORT:-5000}:5000"
+    networks:
+      - workforce_private
+
+volumes:
+  workforce_postgres:
+
+networks:
+  workforce_private:
+    driver: bridge
