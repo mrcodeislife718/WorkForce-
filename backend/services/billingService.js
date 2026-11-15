@@ -55,7 +55,22 @@ async function activeSubscription(userId, workerId) {
   });
 }
 
+const OWNER_SEED_ID = '11111111-1111-1111-1111-111111111111';
+
+function isInternalOwnerTestAccess(userId, env = process.env) {
+  // Developer-owned local testing is never a customer billing bypass.
+  // A predictable account ID alone is insufficient: the seed administrator
+  // requires a separately configured private password.
+  return env.NODE_ENV !== 'production'
+    && env.INTERNAL_OWNER_TEST_ACCESS === 'true'
+    && String(env.SEED_ADMIN_PASSWORD || '').length >= 20
+    && userId === OWNER_SEED_ID;
+}
+
 async function hasEntitlement(userId, worker) {
+  if (isInternalOwnerTestAccess(userId)) {
+    return { entitled: true, reason: 'owner_local_test', subscription: null };
+  }
   // Workforce employee access is not granted by a free catalog flag.
   if (worker.price_model === 'free') return { entitled: false, reason: 'monthly_subscription_required' };
   if (worker.price_model === 'one_time') {
@@ -255,4 +270,5 @@ module.exports = {
   assertStripePriceMatches,
   createCheckoutSession,
   handleStripeEvent,
+  isInternalOwnerTestAccess,
 };
